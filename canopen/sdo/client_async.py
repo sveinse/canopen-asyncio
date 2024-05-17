@@ -1,16 +1,18 @@
-from typing import Optional
+from __future__ import annotations
+from typing import Optional, TYPE_CHECKING
 import struct
 import logging
 import io
-import time
-import queue
 import asyncio
 
-from canopen.network import CanError, Network
+from canopen.network import CanError
 from canopen import objectdictionary
 from canopen.sdo.constants import *
 from canopen.sdo.exceptions import *
 from canopen.sdo import io_async
+
+if TYPE_CHECKING:
+    from canopen.network import Network
 
 logger = logging.getLogger(__name__)
 
