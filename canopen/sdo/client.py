@@ -4,23 +4,19 @@ import io
 import time
 import queue
 import asyncio
+import greenback
 
 from canopen.network import CanError
 from canopen import objectdictionary
 from canopen.sdo.base import SdoBase
 from canopen.sdo.constants import *
 from canopen.sdo.exceptions import *
-from canopen.sdo.client_async import SdoClientAsyncMixin
 from canopen.async_guard import ensure_not_async
 
 logger = logging.getLogger(__name__)
 
 
-# The main reason for having async as a mixin is to keep this class as close to
-# to the original as possible. This way, the async version can be diffed against
-# this file to ensure that the async version is up-to-date with this file.
-
-class SdoClient(SdoBase, SdoClientAsyncMixin):
+class SdoClient(SdoBase):
     """Handles communication with an SDO server."""
 
     #: Max time in seconds to wait for response from server
@@ -47,21 +43,32 @@ class SdoClient(SdoBase, SdoClientAsyncMixin):
         SdoBase.__init__(self, rx_cobid, tx_cobid, od)
         self.responses = queue.Queue()
         self.aresponses = asyncio.Queue()
-        self.lock = asyncio.Lock()
+        self.alock = asyncio.Lock()
 
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_response(self, can_id, data, timestamp):
         # NOTE: Callback. Will be called from another thread
         self.responses.put_nowait(bytes(data))
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    async def aon_response(self, can_id, data, timestamp):
+        await self.aresponses.put(bytes(data))
+
     def send_request(self, request):
+
+        def sleep(seconds):
+            if greenback.has_portal():
+                greenback.await_(asyncio.sleep(seconds))
+            elif self.network.is_async():
+                raise RuntimeError("Cannot sleep in async mode")
+            else:
+                time.sleep(seconds)
+
         retries_left = self.MAX_RETRIES
         while True:
             try:
                 if self.PAUSE_BEFORE_SEND:
                     # NOTE: Blocking call
-                    time.sleep(self.PAUSE_BEFORE_SEND)
+                    sleep(self.PAUSE_BEFORE_SEND)
                 self.network.send_message(self.rx_cobid, request)
             except CanError as e:
                 # Could be a buffer overflow. Wait some time before trying again
@@ -71,25 +78,40 @@ class SdoClient(SdoBase, SdoClientAsyncMixin):
                 logger.info(str(e))
                 if self.PAUSE_AFTER_SEND:
                     # NOTE: Blocking call
-                    time.sleep(self.PAUSE_AFTER_SEND)
+                    sleep(self.PAUSE_AFTER_SEND)
             else:
                 break
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def read_response(self):
-        try:
-            # NOTE: Blocking call
-            response = self.responses.get(
-                block=True, timeout=self.RESPONSE_TIMEOUT)
-        except queue.Empty:
-            raise SdoCommunicationError("No SDO response received")
+
+        def syncread():
+            try:
+                # NOTE: Blocking call
+                return self.responses.get(
+                    block=True, timeout=self.RESPONSE_TIMEOUT)
+            except queue.Empty:
+                raise SdoCommunicationError("No SDO response received")
+
+        async def asyncread():
+            try:
+                return await asyncio.wait_for(
+                    self.aresponses.get(), timeout=self.RESPONSE_TIMEOUT)
+            except asyncio.TimeoutError:
+                raise SdoCommunicationError("No SDO response received")
+
+        if greenback.has_portal():
+            response = greenback.await_(asyncread())
+        elif self.network.is_async():
+            RuntimeError("Cannot read response in async mode")
+        else:
+            response = syncread()
+
         res_command, = struct.unpack_from("B", response)
         if res_command == RESPONSE_ABORTED:
             abort_code, = struct.unpack_from("<L", response, 4)
             raise SdoAbortedError(abort_code)
         return response
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def request_response(self, sdo_request):
         retries_left = self.MAX_RETRIES
         if not self.responses.empty():
@@ -118,7 +140,6 @@ class SdoClient(SdoBase, SdoClientAsyncMixin):
         self.send_request(request)
         logger.error("Transfer aborted by client with code 0x{:08X}".format(abort_code))
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def upload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary.
 
@@ -153,7 +174,12 @@ class SdoClient(SdoBase, SdoClientAsyncMixin):
                     data = data[0:var_size]
         return data
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    async def aupload(self, index: int, subindex: int) -> bytes:
+        """May be called to make a read operation without an Object Dictionary. Async version.
+        """
+        async with self.alock:  # Ensure only one active SDO request per client
+            return await greenback.with_portal_run_sync(self.upload, index, subindex)
+
     def download(
         self,
         index: int,
@@ -181,7 +207,18 @@ class SdoClient(SdoBase, SdoClientAsyncMixin):
                        force_segment=force_segment) as fp:
             fp.write(data)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    async def adownload(
+        self,
+        index: int,
+        subindex: int,
+        data: bytes,
+        force_segment: bool = False,
+    ) -> None:
+        """May be called to make a write operation without an Object Dictionary. Async version.
+        """
+        async with self.alock:  # Ensure only one active SDO request per client
+            await greenback.with_portal_run_sync(self.download, index, subindex, data, force_segment)
+
     def open(self, index, subindex=0, mode="rb", encoding="ascii",
              buffering=1024, size=None, block_transfer=False, force_segment=False, request_crc_support=True):
         """Open the data stream as a file like object.
