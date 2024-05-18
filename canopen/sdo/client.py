@@ -4,6 +4,8 @@ import io
 import time
 import queue
 import asyncio
+import traceback
+import functools
 import greenback
 
 from canopen.network import CanError
@@ -16,6 +18,60 @@ from canopen.async_guard import ensure_not_async
 logger = logging.getLogger(__name__)
 
 
+#
+# DEBUGGING: Is PAUSE_BEFORE_SEND is 0, then greenback seems to be working
+# (or it doesn't trigger the race condition). If it is set to >1.0 then
+# strange things happen.
+#
+# Call stack for aupload() with PAUSE_BEFORE_SEND = 2.0
+#     >> aupload()
+#       >> send_request()
+#         >> sleep()
+#            --> RX: None    # CAN RX thread
+#         << sleep() = <unset>
+#       << send_request() = <unset>
+#     << aupload() = <unset>
+#
+
+
+def debug(level = 0):
+    def _decorator(fn):
+        @functools.wraps(fn)
+        def _fn(*args, **kwargs):
+            result = '<unset>'
+            tlevel = '  '*level
+            try:
+                print(f"{tlevel}>> {fn.__name__}()")
+                result = fn(*args, **kwargs)
+                return result
+            except Exception as e:
+                print(f"{tlevel}-- {fn.__name__}() EXCEPTION: {e}")
+                raise
+            finally:
+                print(f"{tlevel}<< {fn.__name__}() = {result}")
+        return _fn
+    return _decorator
+
+
+def adebug(level = 0):
+    def _decorator(fn):
+        @functools.wraps(fn)
+        async def _fn(*args, **kwargs):
+            result = '<unset>'
+            tlevel = '  '*level
+            try:
+                print(f"{tlevel}>> {fn.__name__}()")
+                result = await fn(*args, **kwargs)
+                return result
+            except Exception as e:
+                print(f"{tlevel}-- {fn.__name__}() EXCEPTION: {e}")
+                raise
+            finally:
+                print(f"{tlevel}<< {fn.__name__}() = {result}")
+        return _fn
+    return _decorator
+
+
 class SdoClient(SdoBase):
     """Handles communication with an SDO server."""
 
@@ -26,7 +82,7 @@ class SdoClient(SdoBase):
     MAX_RETRIES = 1
 
     #: Seconds to wait before sending a request, for rate limiting
-    PAUSE_BEFORE_SEND = 0.0
+    PAUSE_BEFORE_SEND = 2.0
 
     #: Seconds to wait after sending a request
     PAUSE_AFTER_SEND = 0.1
@@ -53,8 +109,10 @@ class SdoClient(SdoBase):
     async def aon_response(self, can_id, data, timestamp):
         await self.aresponses.put(bytes(data))
 
+    @debug(1)
     def send_request(self, request):
 
+        @debug(2)
         def sleep(seconds):
             if greenback.has_portal():
                 greenback.await_(asyncio.sleep(seconds))
@@ -82,8 +140,10 @@ class SdoClient(SdoBase):
             else:
                 break
 
+    @debug(1)
     def read_response(self):
 
+        @debug(2)
         def syncread():
             try:
                 # NOTE: Blocking call
@@ -92,6 +152,7 @@ class SdoClient(SdoBase):
             except queue.Empty:
                 raise SdoCommunicationError("No SDO response received")
 
+        @adebug(2)
         async def asyncread():
             try:
                 return await asyncio.wait_for(
@@ -174,6 +235,7 @@ class SdoClient(SdoBase):
                     data = data[0:var_size]
         return data
 
+    @adebug(0)
     async def aupload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary. Async version.
         """
@@ -207,6 +269,7 @@ class SdoClient(SdoBase):
                        force_segment=force_segment) as fp:
             fp.write(data)
 
+    @adebug(0)
     async def adownload(
         self,
         index: int,
