@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import MutableMapping
-from typing import Callable, Dict, Final, Iterator, List, Optional, Union
-from typing import Callable, Dict, Iterator, List, Optional, Union, TYPE_CHECKING, TextIO
+from typing import Callable, Dict, Final, Iterator, List, Optional, Union, TYPE_CHECKING, TextIO
 
 import can
 from can import Listener
@@ -168,7 +167,7 @@ class Network(MutableMapping):
 
     def create_node(
         self,
-        node: int,
+        node: Union[int, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, TextIO, None] = None,
     ) -> LocalNode:
         """Create a local node in the network.
@@ -234,6 +233,8 @@ class Network(MutableMapping):
         :return:
             An task object with a ``.stop()`` method to stop the transmission
         """
+        if not self.bus:
+            raise RuntimeError("Not connected to CAN bus")
         return PeriodicMessageTask(can_id, data, period, self.bus, remote)
 
     def notify(self, can_id: int, data: bytearray, timestamp: float) -> None:
@@ -315,7 +316,7 @@ class PeriodicMessageTask:
         can_id: int,
         data: CanData,
         period: float,
-        bus,
+        bus: can.BusABC,
         remote: bool = False,
     ):
         """
@@ -352,12 +353,10 @@ class PeriodicMessageTask:
         old_data = self.msg.data
         self.msg.data = new_data
         if hasattr(self._task, "modify_data"):
-            assert self._task is not None  # This will never be None, but mypy needs this
             self._task.modify_data(self.msg)
         elif new_data != old_data:
             # Stop and start (will mess up period unfortunately)
-            if self._task is not None:
-                self._task.stop()
+            self._task.stop()
             self._start()
 
 

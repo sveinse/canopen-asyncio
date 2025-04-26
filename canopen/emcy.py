@@ -90,14 +90,10 @@ class EmcyProducer:
         self.cob_id = cob_id
 
     def send(self, code: int, register: int = 0, data: bytes = b""):
-        if self.network is None:
-            raise RuntimeError("A Network is required")
         payload = EMCY_STRUCT.pack(code, register, data)
         self.network.send_message(self.cob_id, payload)
 
     def reset(self, register: int = 0, data: bytes = b""):
-        if self.network is None:
-            raise RuntimeError("A Network is required")
         payload = EMCY_STRUCT.pack(0, register, data)
         self.network.send_message(self.cob_id, payload)
 

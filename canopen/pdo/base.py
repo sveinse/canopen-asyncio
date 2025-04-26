@@ -466,8 +466,6 @@ class PdoMap:
         known to match what's stored on the node.
         """
         if self.enabled:
-            if self.pdo_node.network is None:
-               raise RuntimeError("A Network is required")
             if self.cob_id is None:
                raise RuntimeError("A valid COB-ID is required")
             logger.info("Subscribing to enabled PDO 0x%X on the network", self.cob_id)
@@ -517,8 +515,6 @@ class PdoMap:
 
     def transmit(self) -> None:
         """Transmit the message once."""
-        if self.pdo_node.network is None:
-            raise RuntimeError("A Network is required")
         if self.cob_id is None:
             raise RuntimeError("A valid COB-ID is required")
         self.pdo_node.network.send_message(self.cob_id, self.data)
@@ -531,8 +527,6 @@ class PdoMap:
             on the object before.
         :raises ValueError: When neither the argument nor the :attr:`period` is given.
         """
-        if self.pdo_node.network is None:
-            raise RuntimeError("A Network is required")
         if self.cob_id is None:
             raise RuntimeError("A valid COB-ID is required")
 
@@ -566,8 +560,6 @@ class PdoMap:
         Silently ignore if not allowed.
         """
         if self.enabled and self.rtr_allowed:
-            if self.pdo_node.network is None:
-                raise RuntimeError("A Network is required")
             if self.cob_id is None:
                 raise RuntimeError("A valid COB-ID is required")
             self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
