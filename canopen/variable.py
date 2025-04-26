@@ -1,9 +1,11 @@
 import logging
-from typing import List, Union, cast
 from collections.abc import Mapping
+from typing import List, Union, cast
+from typing import Union
 
 from canopen import objectdictionary
 from canopen.utils import pretty_index
+
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import binascii
-from typing import Iterator, Optional, Union, cast
 from collections.abc import Mapping
+from typing import Iterator, Optional, Union, cast
 
+import canopen.network
 from canopen import objectdictionary
 from canopen import variable
 from canopen.utils import pretty_index
@@ -43,7 +44,7 @@ class SdoBase(Mapping):
         """
         self.rx_cobid = rx_cobid
         self.tx_cobid = tx_cobid
-        self.network = None
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self.od = od
 
     def __getitem__(
@@ -106,10 +107,12 @@ class SdoRecord(Mapping):
         return SdoVariable(self.sdo_node, self.od[subindex])
 
     def __iter__(self) -> Iterator[int]:
-        return iter(self.od)
+        # Skip the "highest subindex" entry, which is not part of the data
+        return filter(None, iter(self.od))
 
     def __len__(self) -> int:
-        return len(self.od)
+        # Skip the "highest subindex" entry, which is not part of the data
+        return len(self.od) - int(0 in self.od)
 
     def __contains__(self, subindex: object) -> bool:
         return subindex in self.od
@@ -128,6 +131,7 @@ class SdoArray(Mapping):
         return SdoVariable(self.sdo_node, self.od[subindex])
 
     def __iter__(self) -> Iterator[int]:
+        # Skip the "highest subindex" entry, which is not part of the data
         return iter(range(1, len(self) + 1))
 
     def __len__(self) -> int:
