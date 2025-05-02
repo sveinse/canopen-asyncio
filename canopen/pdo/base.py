@@ -58,6 +58,7 @@ class PdoBase(Mapping):
     def __len__(self):
         return len(self.map)
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def read(self, from_od=False):
         """Read PDO configuration from node using SDO."""
         for pdo_map in self.map.values():
@@ -68,6 +69,7 @@ class PdoBase(Mapping):
         for pdo_map in self.map.values():
             await pdo_map.aread(from_od=from_od)
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def save(self):
         """Save PDO configuration to node using SDO."""
         for pdo_map in self.map.values():

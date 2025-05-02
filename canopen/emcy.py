@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 import logging
 import struct
@@ -83,7 +84,7 @@ class EmcyConsumer:
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
-    ) -> "EmcyError":
+    ) -> EmcyError:
         """Wait for a new EMCY to arrive.
 
         :param emcy_code: EMCY code to wait for
@@ -110,6 +111,14 @@ class EmcyConsumer:
                 if emcy_code is None or emcy.code == emcy_code:
                     # This is the one we're interested in
                     return emcy
+
+    def async_wait(
+        self, emcy_code: Optional[int] = None, timeout: float = 10
+    ) -> EmcyError:
+        # FIXME: Implement this function
+        raise NotImplementedError(
+            "async_wait is not implemented."
+        )
 
 
 class EmcyProducer:

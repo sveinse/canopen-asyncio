@@ -8,6 +8,7 @@ import canopen.network
 from canopen import objectdictionary
 from canopen import variable
 from canopen.utils import pretty_index
+from canopen.async_guard import ensure_not_async
 
 
 class CrcXmodem:
@@ -183,12 +184,14 @@ class SdoVariable(variable.Variable):
     def __await__(self):
         return self.aget_raw().__await__()
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def get_data(self) -> bytes:
         return self.sdo_node.upload(self.od.index, self.od.subindex)
 
     async def aget_data(self) -> bytes:
         return await self.sdo_node.aupload(self.od.index, self.od.subindex)
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def set_data(self, data: bytes):
         force_segment = self.od.data_type == objectdictionary.DOMAIN
         self.sdo_node.download(self.od.index, self.od.subindex, data, force_segment)
@@ -205,6 +208,7 @@ class SdoVariable(variable.Variable):
     def readable(self) -> bool:
         return self.od.readable
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def open(self, mode="rb", encoding="ascii", buffering=1024, size=None,
              block_transfer=False, request_crc_support=True):
         """Open the data stream as a file like object.

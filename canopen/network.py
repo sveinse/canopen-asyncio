@@ -60,7 +60,7 @@ class Network(MutableMapping):
         # Register this function as the means to check if canopen is run in
         # async mode. This enables the @ensure_not_async() decorator to
         # work. See async_guard.py
-        set_async_sentinel(self.is_async)
+        set_async_sentinel(self.is_async())
 
         if self.is_async():
             self.subscribe(self.lss.LSS_RX_COBID, self.lss.aon_message_received)
@@ -141,6 +141,9 @@ class Network(MutableMapping):
             self.bus.shutdown()
         self.bus = None
         self.check()
+
+        # Remove the async sentinel
+        set_async_sentinel(False)
 
     def __enter__(self):
         return self
