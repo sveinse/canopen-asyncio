@@ -163,7 +163,7 @@ class SdoArray(Mapping):
         return self.aiter()
 
     def __len__(self) -> int:
-        # NOTE: Blocking - OK. Protected in SdoClient
+        # NOTE: Blocking - protected in SdoClient
         return self[0].raw
 
     async def alen(self) -> int:

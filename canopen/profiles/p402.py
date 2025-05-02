@@ -432,7 +432,7 @@ class BaseNode402(RemoteNode):
             code = self.tpdo_values[0x6061]
         except KeyError:
             logger.warning('The object 0x6061 is not a configured TPDO, fallback to SDO')
-            # NOTE: Blocking - OK. Protected in SdoClient
+            # NOTE: Blocking - protected in SdoClient
             code = self.sdo[0x6061].raw
         return OperationMode.CODE2NAME[code]
 
@@ -445,13 +445,13 @@ class BaseNode402(RemoteNode):
                     f'Operation mode {mode} not suppported on node {self.id}.')
             # Update operation mode in RPDO if possible, fall back to SDO
             if 0x6060 in self.rpdo_pointers:
-                # NOTE: Blocking - OK. Protected in SdoClient
+                # NOTE: Blocking - protected in SdoClient
                 self.rpdo_pointers[0x6060].raw = OperationMode.NAME2CODE[mode]
                 pdo = self.rpdo_pointers[0x6060].pdo_parent
                 if not pdo.is_periodic:
                     pdo.transmit()
             else:
-                # NOTE: Blocking - OK. Protected in SdoClient
+                # NOTE: Blocking - protected in SdoClient
                 self.sdo[0x6060].raw = OperationMode.NAME2CODE[mode]
             timeout = time.monotonic() + self.TIMEOUT_SWITCH_OP_MODE
             # NOTE: Blocking getter
@@ -470,7 +470,7 @@ class BaseNode402(RemoteNode):
         # [target velocity, target position, target torque]
         for target_index in [0x60FF, 0x607A, 0x6071]:
             if target_index in self.sdo.keys():
-                # NOTE: Blocking - OK. Protected in SdoClient
+                # NOTE: Blocking - protected in SdoClient
                 self.sdo[target_index].raw = 0
 
     # NOTE: Blocking
@@ -486,7 +486,7 @@ class BaseNode402(RemoteNode):
         """
         if not hasattr(self, '_op_mode_support'):
             # Cache value only on first lookup, this object should never change.
-            # NOTE: Blocking - OK. Protected in SdoClient
+            # NOTE: Blocking - protected in SdoClient
             self._op_mode_support = self.sdo[0x6502].raw
             logger.info('Caching node %s supported operation modes 0x%04X',
                         self.id, self._op_mode_support)
@@ -502,7 +502,7 @@ class BaseNode402(RemoteNode):
         # NOTE: Callback. Called from another thread unless async
         for obj in mapobject:
             # FIXME: Is this thread-safe?
-            # NOTE: Blocking - OK. Protected in SdoClient
+            # NOTE: Blocking - protected in SdoClient
             self.tpdo_values[obj.index] = obj.raw
 
     # NOTE: Blocking getter on errors
@@ -517,7 +517,7 @@ class BaseNode402(RemoteNode):
             return self.tpdo_values[0x6041]
         except KeyError:
             logger.warning('The object 0x6041 is not a configured TPDO, fallback to SDO')
-            # NOTE: Blocking - OK. Protected in SdoClient
+            # NOTE: Blocking - protected in SdoClient
             return self.sdo[0x6041].raw
 
     # NOTE: Blocking, conditional
@@ -540,7 +540,7 @@ class BaseNode402(RemoteNode):
                 if timestamp is None:
                     raise RuntimeError('Timeout waiting for updated statusword')
             else:
-                # NOTE: Blocking - OK. Protected in SdoClient
+                # NOTE: Blocking - protected in SdoClient
                 return self.sdo[0x6041].raw
         # NOTE: Blocking getter on errors
         return self.statusword
@@ -558,13 +558,13 @@ class BaseNode402(RemoteNode):
     @controlword.setter
     def controlword(self, value):
         if 0x6040 in self.rpdo_pointers:
-            # NOTE: Blocking - OK. Protected in SdoClient
+            # NOTE: Blocking - protected in SdoClient
             self.rpdo_pointers[0x6040].raw = value
             pdo = self.rpdo_pointers[0x6040].pdo_parent
             if not pdo.is_periodic:
                 pdo.transmit()
         else:
-            # NOTE: Blocking - OK. Protected in SdoClient
+            # NOTE: Blocking - protected in SdoClient
             self.sdo[0x6040].raw = value
 
     # NOTE: Blocking getter on errors

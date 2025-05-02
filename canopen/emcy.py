@@ -26,9 +26,9 @@ class EmcyConsumer:
         self.emcy_received = threading.Condition()
         self.aemcy_received = asyncio.Condition()
 
+    # @callback  # NOTE: called from another thread
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_emcy(self, can_id, data, timestamp):
-        # NOTE: Callback. Called from another thread unless async
         code, register, data = EMCY_STRUCT.unpack(data)
         entry = EmcyError(code, register, data, timestamp)
 
@@ -46,6 +46,7 @@ class EmcyConsumer:
             # FIXME: Assert if callback is a coroutine?
             callback(entry)
 
+    # @callback
     async def aon_emcy(self, can_id, data, timestamp):
         code, register, data = EMCY_STRUCT.unpack(data)
         entry = EmcyError(code, register, data, timestamp)
@@ -78,8 +79,6 @@ class EmcyConsumer:
         """Reset log and active lists."""
         self.log = []
         self.active = []
-
-    # FIXME: Implement "await" function. (Other name is needed here)
 
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def wait(

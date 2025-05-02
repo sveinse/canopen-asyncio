@@ -249,6 +249,7 @@ class Network(MutableMapping):
         """
         return PeriodicMessageTask(can_id, data, period, self.bus, remote)
 
+    # @callback  # NOTE: called from another thread
     def notify(self, can_id: int, data: bytearray, timestamp: float) -> None:
         """Feed incoming message to this library.
 
@@ -262,7 +263,6 @@ class Network(MutableMapping):
         :param timestamp:
             Timestamp of the message, preferably as a Unix timestamp
         """
-        # NOTE: Callback. Called from another thread unless async
         callbacks = self.subscribers.get(can_id)
         if callbacks is not None:
             for callback in callbacks:
@@ -390,8 +390,8 @@ class MessageListener(Listener):
     def __init__(self, network: Network):
         self.network = network
 
+    # @callback  # NOTE: called from another thread
     def on_message_received(self, msg):
-        # NOTE: Callback. Called from another thread unless async
         if msg.is_error_frame or msg.is_remote_frame:
             return
 
@@ -425,8 +425,8 @@ class NodeScanner:
         #: A :class:`list` of nodes discovered
         self.nodes: List[int] = []
 
+    # @callback  # NOTE: called from another thread
     def on_message_received(self, can_id: int):
-        # NOTE: Callback. Called from another thread unless async
         service = can_id & 0x780
         node_id = can_id & 0x7F
         if node_id not in self.nodes and node_id != 0 and service in self.SERVICES:

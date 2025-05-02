@@ -410,12 +410,13 @@ class LssMaster:
 
         return response
 
+    # @callback  # NOTE: called from another thread
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_message_received(self, can_id, data, timestamp):
-        # NOTE: Callback. Called from another thread
         # NOTE: Blocking call
         self.responses.put(bytes(data))
 
+    # @callback
     async def aon_message_received(self, can_id, data, timestamp):
         await self.aresponses.put(bytes(data))
 

@@ -322,9 +322,9 @@ class PdoMap:
         # Unknown transmission type, assume non-periodic
         return False
 
+    # @callback  # NOTE: called from another thread
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_message(self, can_id, data, timestamp):
-        # NOTE: Callback. Called from another thread unless async
         is_transmitting = self._task is not None
         if can_id == self.cob_id and not is_transmitting:
             # NOTE: Blocking lock
@@ -339,6 +339,7 @@ class PdoMap:
                     # FIXME: Assert on couroutines?
                     callback(self)
 
+    # @callback
     async def aon_message(self, can_id, data, timestamp):
         is_transmitting = self._task is not None
         if can_id == self.cob_id and not is_transmitting:
@@ -434,7 +435,7 @@ class PdoMap:
                     value = param.od.default
             else:
                 # Get value from SDO
-                # NOTE: Blocking call
+                # NOTE: Blocking - protected in SdoClient
                 value = param.raw
             try:
                 # Deliver value into read_generator and wait for next object
@@ -542,7 +543,7 @@ class PdoMap:
         for sdo, value in self.save_generator():
             if value == '@@get':
                 # NOTE: Sync implementation of the WORKAROUND in save_generator()
-                # NOTE: Blocking call
+                # NOTE: Blocking - protected in SdoClient
                 self._fill_map(sdo.raw)
             else:
                 # NOTE: Blocking call

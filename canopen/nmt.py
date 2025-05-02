@@ -56,8 +56,8 @@ class NmtBase:
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self._state = 0
 
+    # @callback - NOTE: called from another thread
     def on_command(self, can_id, data, timestamp):
-        # NOTE: Callback. Called from another thread unless async
         cmd, node_id = struct.unpack_from("BB", data)
         if node_id in (self.id, 0):
             logger.info("Node %d received command %d", self.id, cmd)
@@ -124,9 +124,9 @@ class NmtMaster(NmtBase):
         self.astate_update = asyncio.Condition()
         self._callbacks = []
 
+    # @callback  # NOTE: called from another thread
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_heartbeat(self, can_id, data, timestamp):
-        # NOTE: Callback. Called from another thread unless async
         # NOTE: Blocking lock
         with self.state_update:
             self.timestamp = timestamp
@@ -145,6 +145,7 @@ class NmtMaster(NmtBase):
             self._state_received = new_state
             self.state_update.notify_all()
 
+    # @callback
     async def aon_heartbeat(self, can_id, data, timestamp):
         async with self.astate_update:
             self.timestamp = timestamp
@@ -265,8 +266,8 @@ class NmtSlave(NmtBase):
         self._heartbeat_time_ms = 0
         self._local_node = local_node
 
+     # @callback  # NOTE: called from another thread
     def on_command(self, can_id, data, timestamp):
-        # NOTE: Callback. Called from another thread unless async
         super(NmtSlave, self).on_command(can_id, data, timestamp)
         self.update_heartbeat()
 
@@ -287,7 +288,7 @@ class NmtSlave(NmtBase):
         # between INITIALIZING and PRE-OPERATIONAL state
         if old_state == 0 and self._state == 127:
             if self._heartbeat_time_ms == 0:
-                # NOTE: Blocking - OK. Protected in SdoClient
+                # NOTE: Blocking - protected in SdoClient
                 heartbeat_time_ms = self._local_node.sdo[0x1017].raw
             else:
                 heartbeat_time_ms = self._heartbeat_time_ms

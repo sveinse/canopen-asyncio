@@ -45,8 +45,8 @@ class SdoClient(SdoBase):
         self.responses = queue.Queue()
         self.lock = asyncio.Lock()
 
+    # @callback  # NOTE: called from another thread
     def on_response(self, can_id, data, timestamp):
-        # NOTE: Callback. Will be called from another thread
         self.responses.put_nowait(bytes(data))
 
     def send_request(self, request):
