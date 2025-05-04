@@ -20,9 +20,9 @@ class EmcyConsumer:
 
     def __init__(self):
         #: Log of all received EMCYs for this node
-        self.log: List["EmcyError"] = []
+        self.log: List[EmcyError] = []
         #: Only active EMCYs. Will be cleared on Error Reset
-        self.active: List["EmcyError"] = []
+        self.active: List[EmcyError] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
         self.aemcy_received = asyncio.Condition()
@@ -66,9 +66,8 @@ class EmcyConsumer:
             if res is not None and asyncio.iscoroutine(res):
                 await res
 
-    def add_callback(self, callback: Callable[["EmcyError"], None]):
-        """Get notified on EMCY messages from this node. The callback must
-           be multi-threaded.
+    def add_callback(self, callback: Callable[[EmcyError], None]):
+        """Get notified on EMCY messages from this node.
 
         :param callback:
             Callable which must take one argument of an

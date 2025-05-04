@@ -365,13 +365,13 @@ class PeriodicMessageTask:
         """Stop transmission"""
         self._task.stop()
 
+    # @callback  # NOTE: Indirectly called from another thread via other callbacks
     def update(self, data: bytes) -> None:
         """Update data of message
 
         :param data:
             New data to transmit
         """
-        # NOTE: Callback. Called from another thread unless async
         new_data = bytearray(data)
         old_data = self.msg.data
         self.msg.data = new_data

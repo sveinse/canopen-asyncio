@@ -266,7 +266,7 @@ class NmtSlave(NmtBase):
         self._heartbeat_time_ms = 0
         self._local_node = local_node
 
-     # @callback  # NOTE: called from another thread
+    # @callback  # NOTE: called from another thread
     def on_command(self, can_id, data, timestamp):
         super(NmtSlave, self).on_command(can_id, data, timestamp)
         self.update_heartbeat()
@@ -326,8 +326,8 @@ class NmtSlave(NmtBase):
             self._send_task.stop()
             self._send_task = None
 
+    # @callback  # NOTE: Indirectly called from another thread via on_command
     def update_heartbeat(self):
-        # NOTE: Called from callback. Called from another thread unless async
         if self._send_task is not None:
             # FIXME: Make this thread-safe
             self._send_task.update([self._state])
