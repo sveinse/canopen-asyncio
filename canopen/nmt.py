@@ -6,6 +6,7 @@ import time
 from typing import Callable, Optional, TYPE_CHECKING
 
 from canopen.async_guard import ensure_not_async
+from canopen.utils import call_callbacks
 import canopen.network
 
 if TYPE_CHECKING:
@@ -121,22 +122,19 @@ class NmtMaster(NmtBase):
         #: Timestamp of last heartbeat message
         self.timestamp: Optional[float] = None
         self.state_update = threading.Condition()
-        self.astate_update = asyncio.Condition()
         self._callbacks = []
 
     # @callback  # NOTE: called from another thread
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_heartbeat(self, can_id, data, timestamp):
+        new_state, = struct.unpack_from("B", data)
+        # Mask out toggle bit
+        new_state &= 0x7F
+        logger.debug("Received heartbeat can-id %d, state is %d", can_id, new_state)
+
         # NOTE: Blocking lock
         with self.state_update:
             self.timestamp = timestamp
-            new_state, = struct.unpack_from("B", data)
-            # Mask out toggle bit
-            new_state &= 0x7F
-            logger.debug("Received heartbeat can-id %d, state is %d", can_id, new_state)
-            for callback in self._callbacks:
-                # FIXME: Assert if callback is coroutine?
-                callback(new_state)
             if new_state == 0:
                 # Boot-up, will go to PRE-OPERATIONAL automatically
                 self._state = 127
@@ -145,25 +143,8 @@ class NmtMaster(NmtBase):
             self._state_received = new_state
             self.state_update.notify_all()
 
-    # @callback
-    async def aon_heartbeat(self, can_id, data, timestamp):
-        async with self.astate_update:
-            self.timestamp = timestamp
-            new_state, = struct.unpack_from("B", data)
-            # Mask out toggle bit
-            new_state &= 0x7F
-            logger.debug("Received heartbeat can-id %d, state is %d", can_id, new_state)
-            for callback in self._callbacks:
-                res = callback(new_state)
-                if res is not None and asyncio.iscoroutine(res):
-                    await res
-            if new_state == 0:
-                # Boot-up, will go to PRE-OPERATIONAL automatically
-                self._state = 127
-            else:
-                self._state = new_state
-            self._state_received = new_state
-            self.astate_update.notify_all()
+        # Call all registered callbacks
+        call_callbacks(self._callbacks, self.network.loop, new_state)
 
     def send_command(self, code: int):
         """Send an NMT command code to the node.
@@ -190,13 +171,7 @@ class NmtMaster(NmtBase):
 
     async def await_for_heartbeat(self, timeout: float = 10):
         """Wait until a heartbeat message is received."""
-        async with self.astate_update:
-            self._state_received = None
-            try:
-                await asyncio.wait_for(self.astate_update.wait(), timeout=timeout)
-            except asyncio.TimeoutError:
-                raise NmtError("No boot-up or heartbeat received")
-        return self.state
+        return await asyncio.to_thread(self.wait_for_heartbeat, timeout)
 
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def wait_for_bootup(self, timeout: float = 10) -> None:
@@ -216,17 +191,7 @@ class NmtMaster(NmtBase):
 
     async def await_for_bootup(self, timeout: float = 10) -> None:
         """Wait until a boot-up message is received."""
-        async def _wait_for_bootup():
-            while True:
-                async with self.astate_update:
-                    self._state_received = None
-                    await self.astate_update.wait()
-                    if self._state_received == 0:
-                        return
-        try:
-            await asyncio.wait_for(_wait_for_bootup(), timeout=timeout)
-        except asyncio.TimeoutError:
-            raise NmtError("Timeout waiting for boot-up message")
+        return await asyncio.to_thread(self.wait_for_bootup, timeout)
 
     def add_heartbeat_callback(self, callback: Callable[[int], None]):
         """Add function to be called on heartbeat reception.

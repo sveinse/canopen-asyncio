@@ -136,7 +136,6 @@ class BaseTests:
             self.assertEqual(state, "UNKNOWN STATE '75'")
 
         async def test_nmt_master_add_heartbeat_callback(self):
-            raise self.skipTest("FIXME")
             event = threading.Event()
             state = None
             def hook(st):
@@ -146,7 +145,10 @@ class BaseTests:
             self.node.nmt.add_heartbeat_callback(hook)
 
             self.dispatch_heartbeat(0x7f)
-            self.assertTrue(event.wait(self.TIMEOUT))
+            if self.use_async:
+                await asyncio.to_thread(event.wait, self.TIMEOUT)
+            else:
+                self.assertTrue(event.wait(self.TIMEOUT))
             self.assertEqual(state, 127)
 
         async def test_nmt_master_node_guarding(self):

@@ -89,7 +89,6 @@ class LssMaster:
         self._node_id = 0
         self._data = None
         self.responses = queue.Queue()
-        self.aresponses = asyncio.Queue()
 
     def send_switch_state_global(self, mode):
         """switch mode to CONFIGURATION_STATE or WAITING_STATE
@@ -415,10 +414,6 @@ class LssMaster:
     def on_message_received(self, can_id, data, timestamp):
         # NOTE: Blocking call
         self.responses.put(bytes(data))
-
-    # @callback
-    async def aon_message_received(self, can_id, data, timestamp):
-        await self.aresponses.put(bytes(data))
 
 
 class LssError(Exception):

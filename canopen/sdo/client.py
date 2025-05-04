@@ -48,7 +48,7 @@ class SdoClient(SdoBase):
 
     # @callback  # NOTE: called from another thread
     def on_response(self, can_id, data, timestamp):
-        self.responses.put_nowait(bytes(data))
+        self.responses.put(bytes(data))
 
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def send_request(self, request):

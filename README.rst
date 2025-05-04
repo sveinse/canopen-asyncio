@@ -11,6 +11,17 @@ The library supports Python 3.8 or newer.
 This library is the asyncio port of CANopen. See below for code example.
 
 
+Branch notes
+------------
+This branch is work in progress, where the intent is to concept test running
+the backend callbacks and unchanged from the sync version. The sync-async
+crossing is done via sync waiting via `asyncio.to_thread()` in each class
+that needs it.
+
+The goal was to simplify the impact of the async changes. Having an async
+backend requires a lot of duplication of code.
+
+
 Async status
 ------------
 

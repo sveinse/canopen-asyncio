@@ -7,6 +7,7 @@ import time
 from typing import Callable, List, Optional
 
 from canopen.async_guard import ensure_not_async
+from canopen.utils import call_callbacks
 import canopen.network
 
 
@@ -25,7 +26,6 @@ class EmcyConsumer:
         self.active: List[EmcyError] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
-        self.aemcy_received = asyncio.Condition()
 
     # @callback  # NOTE: called from another thread
     @ensure_not_async  # NOTE: Safeguard for accidental async use
@@ -43,28 +43,9 @@ class EmcyConsumer:
             self.log.append(entry)
             self.emcy_received.notify_all()
 
-        for callback in self.callbacks:
-            # FIXME: Assert if callback is a coroutine?
-            callback(entry)
-
-    # @callback
-    async def aon_emcy(self, can_id, data, timestamp):
-        code, register, data = EMCY_STRUCT.unpack(data)
-        entry = EmcyError(code, register, data, timestamp)
-
-        async with self.aemcy_received:
-            if code & 0xFF00 == 0:
-                # Error reset
-                self.active = []
-            else:
-                self.active.append(entry)
-            self.log.append(entry)
-            self.aemcy_received.notify_all()
-
-        for callback in self.callbacks:
-            res = callback(entry)
-            if res is not None and asyncio.iscoroutine(res):
-                await res
+        # Call all registered callbacks
+        # FIXME: Add the nework loop to the callback
+        call_callbacks(self.callbacks, None, entry)
 
     def add_callback(self, callback: Callable[[EmcyError], None]):
         """Get notified on EMCY messages from this node.
@@ -111,13 +92,17 @@ class EmcyConsumer:
                     # This is the one we're interested in
                     return emcy
 
-    def async_wait(
+    async def async_wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
     ) -> EmcyError:
-        # FIXME: Implement this function
-        raise NotImplementedError(
-            "async_wait is not implemented."
-        )
+        """Wait for a new EMCY to arrive.
+
+        :param emcy_code: EMCY code to wait for
+        :param timeout: Max time in seconds to wait
+
+        :return: The EMCY exception object or None if timeout
+        """
+        return await asyncio.to_thread(self.wait, emcy_code, timeout)
 
 
 class EmcyProducer:

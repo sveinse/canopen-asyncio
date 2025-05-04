@@ -13,6 +13,7 @@ from canopen import objectdictionary
 from canopen import variable
 from canopen.async_guard import ensure_not_async
 from canopen.sdo import SdoAbortedError
+from canopen.utils import call_callbacks
 
 if TYPE_CHECKING:
     from canopen import LocalNode, RemoteNode
@@ -221,7 +222,6 @@ class PdoMap:
         self.period: Optional[float] = None
         self.callbacks = []
         self.receive_condition = threading.Condition()
-        self.areceive_condition = asyncio.Condition()
         self.is_received: bool = False
         self._task = None
 
@@ -337,25 +337,9 @@ class PdoMap:
                     self.period = timestamp - self.timestamp
                 self.timestamp = timestamp
                 self.receive_condition.notify_all()
-                for callback in self.callbacks:
-                    # FIXME: Assert on couroutines?
-                    callback(self)
 
-    # @callback
-    async def aon_message(self, can_id, data, timestamp):
-        is_transmitting = self._task is not None
-        if can_id == self.cob_id and not is_transmitting:
-            async with self.areceive_condition:
-                self.is_received = True
-                self.data = data
-                if self.timestamp is not None:
-                    self.period = timestamp - self.timestamp
-                self.timestamp = timestamp
-                self.areceive_condition.notify_all()
-                for callback in self.callbacks:
-                    res = callback(self)
-                    if res is not None and asyncio.iscoroutine(res):
-                        await res
+            # Call all registered callbacks
+            call_callbacks(self.callbacks, self.pdo_node.network.loop, self)
 
     def add_callback(self, callback: Callable[[PdoMap], None]) -> None:
         """Add a callback which will be called on receive.
@@ -570,10 +554,7 @@ class PdoMap:
         """
         if self.enabled:
             logger.info("Subscribing to enabled PDO 0x%X on the network", self.cob_id)
-            if self.pdo_node.network.is_async():
-                self.pdo_node.network.subscribe(self.cob_id, self.aon_message)
-            else:
-                self.pdo_node.network.subscribe(self.cob_id, self.on_message)
+            self.pdo_node.network.subscribe(self.cob_id, self.on_message)
 
     def clear(self) -> None:
         """Clear all variables from this map."""
@@ -681,14 +662,7 @@ class PdoMap:
         :param float timeout: Max time to wait in seconds.
         :return: Timestamp of message received or None if timeout.
         """
-        async with self.areceive_condition:
-            self.is_received = False
-            try:
-                await asyncio.wait_for(self.areceive_condition.wait(), timeout=timeout)
-                # FIXME: Can we assume that self.is_received it set here?
-                return self.timestamp
-            except asyncio.TimeoutError:
-                return None
+        await asyncio.to_thread(self.wait_for_reception, timeout)
 
 
 class PdoVariable(variable.Variable):

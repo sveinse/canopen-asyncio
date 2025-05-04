@@ -62,10 +62,7 @@ class Network(MutableMapping):
         # work. See async_guard.py
         set_async_sentinel(self.is_async())
 
-        if self.is_async():
-            self.subscribe(self.lss.LSS_RX_COBID, self.lss.aon_message_received)
-        else:
-            self.subscribe(self.lss.LSS_RX_COBID, self.lss.on_message_received)
+        self.subscribe(self.lss.LSS_RX_COBID, self.lss.on_message_received)
 
     def subscribe(self, can_id: int, callback: Callback) -> None:
         """Listen for messages with a specific CAN ID.
@@ -122,7 +119,7 @@ class Network(MutableMapping):
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
         if self.notifier is None:
-            self.notifier = can.Notifier(self.bus, [], self.NOTIFIER_CYCLE, loop=self.loop)
+            self.notifier = can.Notifier(self.bus, [], self.NOTIFIER_CYCLE)
         for listener in self.listeners:
             self.notifier.add_listener(listener)
         return self
@@ -266,12 +263,10 @@ class Network(MutableMapping):
         :param timestamp:
             Timestamp of the message, preferably as a Unix timestamp
         """
-        callbacks = self.subscribers.get(can_id)
-        if callbacks is not None:
+        if can_id in self.subscribers:
+            callbacks = self.subscribers[can_id]
             for callback in callbacks:
-                res = callback(can_id, data, timestamp)
-                if res is not None and self.loop is not None and asyncio.iscoroutine(res):
-                    self.loop.create_task(res)
+                callback(can_id, data, timestamp)
         self.scanner.on_message_received(can_id)
 
     def check(self) -> None:

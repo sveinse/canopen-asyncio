@@ -61,12 +61,8 @@ class RemoteNode(BaseNode):
         self.nmt.network = network
         for sdo in self.sdo_channels:
             network.subscribe(sdo.tx_cobid, sdo.on_response)
-        if network.is_async():
-            network.subscribe(0x700 + self.id, self.nmt.aon_heartbeat)
-            network.subscribe(0x80 + self.id, self.emcy.aon_emcy)
-        else:
-            network.subscribe(0x700 + self.id, self.nmt.on_heartbeat)
-            network.subscribe(0x80 + self.id, self.emcy.on_emcy)
+        network.subscribe(0x700 + self.id, self.nmt.on_heartbeat)
+        network.subscribe(0x80 + self.id, self.emcy.on_emcy)
         network.subscribe(0, self.nmt.on_command)
 
     def remove_network(self) -> None:
@@ -74,12 +70,8 @@ class RemoteNode(BaseNode):
             return
         for sdo in self.sdo_channels:
             self.network.unsubscribe(sdo.tx_cobid, sdo.on_response)
-        if self.network.is_async():
-            self.network.unsubscribe(0x700 + self.id, self.nmt.aon_heartbeat)
-            self.network.unsubscribe(0x80 + self.id, self.emcy.aon_emcy)
-        else:
-            self.network.unsubscribe(0x700 + self.id, self.nmt.on_heartbeat)
-            self.network.unsubscribe(0x80 + self.id, self.emcy.on_emcy)
+        self.network.unsubscribe(0x700 + self.id, self.nmt.on_heartbeat)
+        self.network.unsubscribe(0x80 + self.id, self.emcy.on_emcy)
         self.network.unsubscribe(0, self.nmt.on_command)
         self.network = canopen.network._UNINITIALIZED_NETWORK
         self.sdo.network = canopen.network._UNINITIALIZED_NETWORK
