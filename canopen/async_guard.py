@@ -1,10 +1,14 @@
 """ Utils for async """
 import functools
+import logging
 import threading
+import traceback
 
 # NOTE: Global, but needed to be able to use ensure_not_async() in
 #       decorator context.
 _ASYNC_SENTINELS: dict[int, bool] = {}
+
+logger = logging.getLogger(__name__)
 
 
 def set_async_sentinel(enable: bool):
@@ -19,6 +23,8 @@ def ensure_not_async(fn):
     @functools.wraps(fn)
     def async_guard_wrap(*args, **kwargs):
         if _ASYNC_SENTINELS.get(threading.get_ident(), False):
-            raise RuntimeError(f"Calling a blocking function in async. {fn.__qualname__}() in {fn.__code__.co_filename}:{fn.__code__.co_firstlineno}, while running async")
+            st = "".join(traceback.format_stack())
+            logger.debug("Traceback:\n%s", st.rstrip())
+            raise RuntimeError(f"Calling a blocking function, {fn.__qualname__}() in {fn.__code__.co_filename}:{fn.__code__.co_firstlineno}, while running async")
         return fn(*args, **kwargs)
     return async_guard_wrap
