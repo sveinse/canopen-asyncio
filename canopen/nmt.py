@@ -57,7 +57,7 @@ class NmtBase:
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self._state = 0
 
-    # @callback - NOTE: called from another thread
+    # @callback  # NOTE: called from another thread
     def on_command(self, can_id, data, timestamp):
         cmd, node_id = struct.unpack_from("BB", data)
         if node_id in (self.id, 0):
