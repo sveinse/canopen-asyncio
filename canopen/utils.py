@@ -1,7 +1,6 @@
 """Additional utility functions for canopen."""
 
-import asyncio
-from typing import Optional, Union, Iterable, Callable
+from typing import Optional, Union
 
 
 def pretty_index(index: Optional[Union[int, str]],
@@ -22,24 +21,3 @@ def pretty_index(index: Optional[Union[int, str]],
         sub_str = f"{sub!r}"
 
     return ":".join(s for s in (index_str, sub_str) if s)
-
-
-def call_callbacks(callbacks: Iterable[Callable], loop: asyncio.AbstractEventLoop | None = None, *args, **kwargs) -> bool:
-    """Call a list of callbacks with the given arguments.
-
-    """
-
-    def dispatch():
-        for callback in callbacks:
-            result = callback(*args, **kwargs)
-            if result is not None and asyncio.iscoroutine(result):
-                asyncio.create_task(result)
-
-    # If the loop is running, call the callbacks from the loop to minimize
-    # blocking and multithreading issues.
-    if loop is not None and loop.is_running():
-        loop.call_soon_threadsafe(dispatch)
-        return False
-    else:
-        dispatch()
-        return True

@@ -7,7 +7,6 @@ import time
 from typing import Callable, List, Optional
 
 from canopen.async_guard import ensure_not_async
-from canopen.utils import call_callbacks
 import canopen.network
 
 
@@ -26,6 +25,7 @@ class EmcyConsumer:
         self.active: List[EmcyError] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
 
     # @callback  # NOTE: called from another thread
     @ensure_not_async  # NOTE: Safeguard for accidental async use
@@ -44,8 +44,7 @@ class EmcyConsumer:
             self.emcy_received.notify_all()
 
         # Call all registered callbacks
-        # FIXME: Add the nework loop to the callback
-        call_callbacks(self.callbacks, None, entry)
+        self.network.dispatch_callbacks(self.callbacks, entry)
 
     def add_callback(self, callback: Callable[[EmcyError], None]):
         """Get notified on EMCY messages from this node.

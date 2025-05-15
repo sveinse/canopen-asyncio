@@ -13,7 +13,6 @@ from canopen import objectdictionary
 from canopen import variable
 from canopen.async_guard import ensure_not_async
 from canopen.sdo import SdoAbortedError
-from canopen.utils import call_callbacks
 
 if TYPE_CHECKING:
     from canopen import LocalNode, RemoteNode
@@ -339,7 +338,7 @@ class PdoMap:
                 self.receive_condition.notify_all()
 
             # Call all registered callbacks
-            call_callbacks(self.callbacks, self.pdo_node.network.loop, self)
+            self.pdo_node.network.dispatch_callbacks(self.callbacks, self)
 
     def add_callback(self, callback: Callable[[PdoMap], None]) -> None:
         """Add a callback which will be called on receive.

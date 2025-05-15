@@ -93,6 +93,7 @@ class BaseTests:
             self.assertIs(self.node.tpdo.network, self.network)
             self.assertIs(self.node.rpdo.network, self.network)
             self.assertIs(self.node.nmt.network, self.network)
+            self.assertIs(self.node.emcy.network, self.network)
 
             # Test that its not possible to associate the network multiple times
             with self.assertRaises(RuntimeError) as cm:
@@ -108,6 +109,7 @@ class BaseTests:
             self.assertIs(self.node.tpdo.network, uninitalized)
             self.assertIs(self.node.rpdo.network, uninitalized)
             self.assertIs(self.node.nmt.network, uninitalized)
+            self.assertIs(self.node.emcy.network, uninitalized)
             self.assertEqual(count_subscribers(self.network), n_subscribers)
 
             # Test that its possible to deassociate the network multiple times

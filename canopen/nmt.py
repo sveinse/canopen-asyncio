@@ -6,7 +6,6 @@ import time
 from typing import Callable, Optional, TYPE_CHECKING
 
 from canopen.async_guard import ensure_not_async
-from canopen.utils import call_callbacks
 import canopen.network
 
 if TYPE_CHECKING:
@@ -144,7 +143,7 @@ class NmtMaster(NmtBase):
             self.state_update.notify_all()
 
         # Call all registered callbacks
-        call_callbacks(self._callbacks, self.network.loop, new_state)
+        self.network.dispatch_callbacks(self._callbacks, new_state)
 
     def send_command(self, code: int):
         """Send an NMT command code to the node.

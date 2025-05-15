@@ -301,6 +301,51 @@ class BaseTests:
             if msg is not None:
                 self.assertIsNone(bus.recv(PERIOD))
 
+        def test_dispatch_callbacks_sync(self):
+
+            result1 = 0
+            result2 = 0
+
+            def callback1(arg):
+                nonlocal result1
+                result1 = arg + 1
+
+            def callback2(arg):
+                nonlocal result2
+                result2 = arg * 2
+
+            # Check that the synchronous callbacks are called correctly
+            self.network.dispatch_callbacks([callback1, callback2], 5)
+            self.assertEqual([result1, result2], [6, 10])
+
+            async def async_callback(arg):
+                return arg + 1
+
+            # Check that it's not possible to call async callbacks in a non-async context
+            with self.assertRaises(RuntimeError):
+                self.network.dispatch_callbacks([async_callback], 5)
+
+        async def test_dispatch_callbacks_async(self):
+
+            result1 = 0
+            result2 = 0
+
+            event = asyncio.Event()
+
+            def callback(arg):
+                nonlocal result1
+                result1 = arg + 1
+
+            async def async_callback(arg):
+                nonlocal result2
+                result2 = arg * 2
+                event.set()  # Notify the test that the async callback is done
+
+            # Check that both callbacks are called correctly in an async context
+            self.network.dispatch_callbacks([callback, async_callback], 5)
+            await event.wait()
+            self.assertEqual([result1, result2], [6, 10])
+
 
     class TestScanner(unittest.IsolatedAsyncioTestCase):
         TIMEOUT = 0.1

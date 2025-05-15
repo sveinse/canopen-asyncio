@@ -40,6 +40,7 @@ class Network(MutableMapping):
         #: :meth:`canopen.Network.connect` is called
         self.bus: Optional[BusABC] = bus
         self.loop: Optional[asyncio.AbstractEventLoop] = loop
+        self._tasks: set[asyncio.Task] = set()
         #: A :class:`~canopen.network.NodeScanner` for detecting nodes
         self.scanner = NodeScanner(self)
         #: List of :class:`can.Listener` objects.
@@ -119,6 +120,12 @@ class Network(MutableMapping):
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
         if self.notifier is None:
+            # Do not start a can notifier with the async loop. It changes the
+            # behavior of the notifier callbacks. Instead of running the
+            # callbacks from a separate thread, it runs the callbacks in the
+            # same thread as the event loop where blocking calls are not allowed.
+            # This library needs to support both async and sync, so we need to
+            # use the notifier in a separate thread.
             self.notifier = can.Notifier(self.bus, [], self.NOTIFIER_CYCLE)
         for listener in self.listeners:
             self.notifier.add_listener(listener)
@@ -146,6 +153,15 @@ class Network(MutableMapping):
         return self
 
     def __exit__(self, type, value, traceback):
+        self.disconnect()
+
+    async def __aenter__(self):
+        # FIXME: When TaskGroup are available, we should use them to manage the
+        # tasks. The user must use the `async with` statement with the Network
+        # to ensure its created.
+        return self
+
+    async def __aexit__(self, type, value, traceback):
         self.disconnect()
 
     # FIXME: Implement async "aadd_node"
@@ -264,10 +280,43 @@ class Network(MutableMapping):
             Timestamp of the message, preferably as a Unix timestamp
         """
         if can_id in self.subscribers:
-            callbacks = self.subscribers[can_id]
-            for callback in callbacks:
-                callback(can_id, data, timestamp)
+            self.dispatch_callbacks(self.subscribers[can_id], can_id, data, timestamp)
         self.scanner.on_message_received(can_id)
+
+    def on_error(self, exc: BaseException) -> None:
+        """This method is called to handle any exception in the callbacks."""
+
+        # Exceptions in any callbaks should not affect CAN processing
+        logger.exception("Exception in callback: %s", exc_info=exc)
+
+    def dispatch_callbacks(self, callbacks: List[Callback], *args) -> None:
+        """Dispatch a list of callbacks with the given arguments.
+
+        :param callbacks:
+            List of callbacks to call
+        :param args:
+            Arguments to pass to the callbacks
+        """
+        def task_done(task: asyncio.Task) -> None:
+            """Callback to be called when a task is done."""
+            self._tasks.discard(task)
+
+            # FIXME: This section should probably be migrated to a TaskGroup.
+            # However, this is not available yet in Python 3.8 - 3.10.
+            try:
+                if (exc := task.exception()) is not None:
+                    self.on_error(exc)
+            except (asyncio.CancelledError, asyncio.InvalidStateError) as exc:
+                # Handle cancelled tasks and unfinished tasks gracefully
+                self.on_error(exc)
+
+        # Run the callbacks
+        for callback in callbacks:
+            result = callback(*args)
+            if result is not None and asyncio.iscoroutine(result):
+                task = asyncio.create_task(result)
+                self._tasks.add(task)
+                task.add_done_callback(task_done)
 
     def check(self) -> None:
         """Check that no fatal error has occurred in the receiving thread.
@@ -397,7 +446,7 @@ class MessageListener(Listener):
             self.network.notify(msg.arbitration_id, msg.data, msg.timestamp)
         except Exception as e:
             # Exceptions in any callbaks should not affect CAN processing
-            logger.error(str(e))
+            self.network.on_error(e)
 
     def stop(self) -> None:
         """Override abstract base method to release any resources."""
