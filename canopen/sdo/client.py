@@ -634,8 +634,7 @@ class BlockUploadStream(io.RawIOBase):
         request[1] = self._ackseq
         request[2] = self.blksize
         self.sdo_client.send_request(request)
-        if self._ackseq == self.blksize:
-            self._ackseq = 0
+        self._ackseq = 0
 
     def _end_upload(self):
         response = self.sdo_client.read_response()

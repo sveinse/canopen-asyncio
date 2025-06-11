@@ -3,7 +3,7 @@ import logging
 import struct
 import threading
 import time
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import Callable, Dict, Final, List, Optional, TYPE_CHECKING
 
 from canopen.async_guard import ensure_not_async
 import canopen.network
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-NMT_STATES = {
+NMT_STATES: Final[Dict[int, str]] = {
     0: 'INITIALISING',
     4: 'STOPPED',
     5: 'OPERATIONAL',
@@ -23,7 +23,7 @@ NMT_STATES = {
     127: 'PRE-OPERATIONAL'
 }
 
-NMT_COMMANDS = {
+NMT_COMMANDS: Final[Dict[str, int]] = {
     'OPERATIONAL': 1,
     'STOPPED': 2,
     'SLEEP': 80,
@@ -34,7 +34,7 @@ NMT_COMMANDS = {
     'RESET COMMUNICATION': 130
 }
 
-COMMAND_TO_STATE = {
+COMMAND_TO_STATE: Final[Dict[int, int]] = {
     1: 5,
     2: 4,
     80: 80,
@@ -121,7 +121,7 @@ class NmtMaster(NmtBase):
         #: Timestamp of last heartbeat message
         self.timestamp: Optional[float] = None
         self.state_update = threading.Condition()
-        self._callbacks = []
+        self._callbacks: List[Callable[[int], None]] = []
 
     # @callback  # NOTE: called from another thread
     @ensure_not_async  # NOTE: Safeguard for accidental async use
@@ -209,7 +209,8 @@ class NmtMaster(NmtBase):
         :param period:
             Period (in seconds) at which the node guarding should be advertised to the slave node.
         """
-        if self._node_guarding_producer : self.stop_node_guarding()
+        if self._node_guarding_producer:
+            self.stop_node_guarding()
         self._node_guarding_producer = self.network.send_periodic(0x700 + self.id, None, period, True)
 
     def stop_node_guarding(self):

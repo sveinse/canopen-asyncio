@@ -468,7 +468,9 @@ class NodeScanner:
     SERVICES = (0x700, 0x580, 0x180, 0x280, 0x380, 0x480, 0x80)
 
     def __init__(self, network: Optional[Network] = None):
-        self.network = network
+        if network is None:
+            network = _UNINITIALIZED_NETWORK
+        self.network: Network = network
         #: A :class:`list` of nodes discovered
         self.nodes: List[int] = []
 
@@ -477,10 +479,6 @@ class NodeScanner:
         service = can_id & 0x780
         node_id = can_id & 0x7F
         if node_id not in self.nodes and node_id != 0 and service in self.SERVICES:
-            # NOTE: In the current CPython implementation append on lists are
-            #       atomic which makes this thread-safe. However, other py
-            #       interpreters might not. It should be considered if a better
-            #       mechanism is needed to protect against race.
             self.nodes.append(node_id)
 
     def reset(self):
@@ -489,9 +487,6 @@ class NodeScanner:
 
     def search(self, limit: int = 127) -> None:
         """Search for nodes by sending SDO requests to all node IDs."""
-        if self.network is None:
-            raise RuntimeError("A Network is required to do active scanning")
-        # SDO upload request, parameter 0x1000:0x00
         sdo_req = b"\x40\x00\x10\x00\x00\x00\x00\x00"
         for node_id in range(1, limit + 1):
             self.network.send_message(0x600 + node_id, sdo_req)
