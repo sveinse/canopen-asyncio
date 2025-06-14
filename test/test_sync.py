@@ -51,9 +51,6 @@ class TestSync(unittest.IsolatedAsyncioTestCase):
             self.sync.start(0)
 
     async def test_sync_producer_start(self):
-        if self.use_async:
-            raise self.skipTest("Test not supported with async")
-
         self.sync.start(PERIOD)
         self.addCleanup(self.sync.stop)
 

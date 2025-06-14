@@ -182,8 +182,7 @@ def import_eds(source, node_id):
     return od
 
 
-# FIXME: Disable for now, as the tests rely on loading the EDS
-# @ensure_not_async  # NOTE: Safeguard for accidental async use
+@ensure_not_async  # NOTE: Safeguard for accidental async use
 def import_from_node(node_id: int, network: canopen.network.Network):
     """ Download the configuration from the remote node
     :param int node_id: Identifier of the node

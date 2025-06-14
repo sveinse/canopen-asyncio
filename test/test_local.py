@@ -3,6 +3,7 @@ import unittest
 import asyncio
 
 import canopen
+from canopen.async_guard import AllowBlocking
 
 from .util import SAMPLE_EDS
 
@@ -23,13 +24,15 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         self.network1 = canopen.Network(loop=loop)
         self.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network1.connect("test", interface="virtual")
-        self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
+        with AllowBlocking():
+            self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
 
         self.network2 = canopen.Network(loop=loop)
         self.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network2.connect("test", interface="virtual")
         self.local_node = self.network2.create_node(2, SAMPLE_EDS)
-        self.remote_node2 = self.network1.add_node(3, SAMPLE_EDS)
+        with AllowBlocking():
+            self.remote_node2 = self.network1.add_node(3, SAMPLE_EDS)
         self.local_node2 = self.network2.create_node(3, SAMPLE_EDS)
 
     def tearDown(self):
@@ -47,7 +50,7 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
 
     async def test_block_upload_switch_to_expedite_upload(self):
         if self.use_async:
-            raise self.skipTest("Block upload not supported in async mode")
+            self.skipTest("Block upload not supported in async mode")
         with self.assertRaises(canopen.SdoCommunicationError) as context:
             with self.remote_node.sdo[0x1008].open('r', block_transfer=True) as fp:
                 pass
@@ -57,7 +60,7 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
 
     async def test_block_download_not_supported(self):
         if self.use_async:
-            raise self.skipTest("Block download not supported in async mode")
+            self.skipTest("Block download not supported in async mode")
         data = b"TEST DEVICE"
         with self.assertRaises(canopen.SdoAbortedError) as context:
             with self.remote_node.sdo[0x1008].open('wb',
@@ -282,7 +285,8 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
         self.network1 = canopen.Network(loop=loop)
         self.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network1.connect("test", interface="virtual")
-        self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
+        with AllowBlocking():
+            self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
 
         self.network2 = canopen.Network(loop=loop)
         self.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0

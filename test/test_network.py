@@ -30,13 +30,19 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
     async def test_network_add_node(self):
         # Add using str.
         with self.assertLogs():
-            node = self.network.add_node(2, SAMPLE_EDS)
+            if self.use_async:
+                node = await self.network.aadd_node(2, SAMPLE_EDS)
+            else:
+                node = self.network.add_node(2, SAMPLE_EDS)
         self.assertEqual(self.network[2], node)
         self.assertEqual(node.id, 2)
         self.assertIsInstance(node, canopen.RemoteNode)
 
         # Add using OD.
-        node = self.network.add_node(3, self.network[2].object_dictionary)
+        if self.use_async:
+            node = await self.network.aadd_node(3, self.network[2].object_dictionary)
+        else:
+            node = self.network.add_node(3, self.network[2].object_dictionary)
         self.assertEqual(self.network[3], node)
         self.assertEqual(node.id, 3)
         self.assertIsInstance(node, canopen.RemoteNode)
@@ -44,7 +50,10 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
         # Add using RemoteNode.
         with self.assertLogs():
             node = canopen.RemoteNode(4, SAMPLE_EDS)
-        self.network.add_node(node)
+        if self.use_async:
+            await self.network.aadd_node(node)
+        else:
+            self.network.add_node(node)
         self.assertEqual(self.network[4], node)
         self.assertEqual(node.id, 4)
         self.assertIsInstance(node, canopen.RemoteNode)
@@ -52,7 +61,10 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
         # Add using LocalNode.
         with self.assertLogs():
             node = canopen.LocalNode(5, SAMPLE_EDS)
-        self.network.add_node(node)
+        if self.use_async:
+            await self.network.aadd_node(node)
+        else:
+            self.network.add_node(node)
         self.assertEqual(self.network[5], node)
         self.assertEqual(node.id, 5)
         self.assertIsInstance(node, canopen.LocalNode)
@@ -63,7 +75,10 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
     async def test_network_add_node_upload_eds(self):
         # Will err because we're not connected to a real network.
         with self.assertLogs(level=logging.ERROR):
-            self.network.add_node(2, SAMPLE_EDS, upload_eds=True)
+            if self.use_async:
+                await self.network.aadd_node(2, SAMPLE_EDS, upload_eds=True)
+            else:
+                self.network.add_node(2, SAMPLE_EDS, upload_eds=True)
 
     async def test_network_create_node(self):
         with self.assertLogs():
@@ -100,7 +115,10 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
 
     async def test_network_notify(self):
         with self.assertLogs():
-            self.network.add_node(2, SAMPLE_EDS)
+            if self.use_async:
+                await self.network.aadd_node(2, SAMPLE_EDS)
+            else:
+                self.network.add_node(2, SAMPLE_EDS)
         node = self.network[2]
         async def notify(*args):
             """Simulate a notification from the network."""
@@ -229,8 +247,12 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
 
     async def test_network_item_access(self):
         with self.assertLogs():
-            self.network.add_node(2, SAMPLE_EDS)
-            self.network.add_node(3, SAMPLE_EDS)
+            if self.use_async:
+                await self.network.aadd_node(2, SAMPLE_EDS)
+                await self.network.aadd_node(3, SAMPLE_EDS)
+            else:
+                self.network.add_node(2, SAMPLE_EDS)
+                self.network.add_node(3, SAMPLE_EDS)
         self.assertEqual([2, 3], [node for node in self.network])
 
         # Check __delitem__.
@@ -250,8 +272,6 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([3], [node for node in self.network])
 
     async def test_network_send_periodic(self):
-        if self.use_async:
-            raise self.skipTest("Test is not adapted for async mode yet")
         DATA1 = bytes([1, 2, 3])
         DATA2 = bytes([4, 5, 6])
         COB_ID = 0x123

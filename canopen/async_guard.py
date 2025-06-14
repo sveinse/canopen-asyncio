@@ -28,3 +28,16 @@ def ensure_not_async(fn):
             raise RuntimeError(f"Calling a blocking function, {fn.__qualname__}() in {fn.__code__.co_filename}:{fn.__code__.co_firstlineno}, while running async")
         return fn(*args, **kwargs)
     return async_guard_wrap
+
+
+class AllowBlocking:
+    """ Context manager to pause async guard """
+    def __init__(self):
+        self._enabled = _ASYNC_SENTINELS.get(threading.get_ident(), False)
+
+    def __enter__(self):
+        set_async_sentinel(False)
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        set_async_sentinel(self._enabled)

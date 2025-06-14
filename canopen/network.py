@@ -165,8 +165,7 @@ class Network(MutableMapping):
     async def __aexit__(self, type, value, traceback):
         self.disconnect()
 
-    # NOTE: Disable this test for now because tests depend on it
-    # @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def add_node(
         self,
         node: Union[int, RemoteNode, LocalNode],

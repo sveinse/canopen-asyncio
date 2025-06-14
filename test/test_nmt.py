@@ -6,6 +6,7 @@ import asyncio
 import can
 
 import canopen
+from canopen.async_guard import AllowBlocking
 from canopen.nmt import COMMAND_TO_STATE, NMT_COMMANDS, NMT_STATES, NmtError
 
 from .util import SAMPLE_EDS
@@ -61,7 +62,8 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
         net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         net.connect(interface="virtual")
         with self.assertLogs():
-            node = net.add_node(self.NODE_ID, SAMPLE_EDS)
+            with AllowBlocking():
+                node = net.add_node(self.NODE_ID, SAMPLE_EDS)
 
         self.bus = can.Bus(interface="virtual", loop=loop)
         self.net = net
@@ -151,8 +153,6 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state, 127)
 
     async def test_nmt_master_node_guarding(self):
-        if self.use_async:
-            raise self.skipTest("Test not applicable for async mode")
         self.node.nmt.start_node_guarding(self.PERIOD)
         msg = self.bus.recv(self.TIMEOUT)
         self.assertIsNotNone(msg)
@@ -193,14 +193,16 @@ class TestNmtSlave(unittest.IsolatedAsyncioTestCase):
         self.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network1.connect("test", interface="virtual")
         with self.assertLogs():
-            self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
+            with AllowBlocking():
+                self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
 
         self.network2 = canopen.Network(loop=loop)
         self.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network2.connect("test", interface="virtual")
         with self.assertLogs():
             self.local_node = self.network2.create_node(2, SAMPLE_EDS)
-            self.remote_node2 = self.network1.add_node(3, SAMPLE_EDS)
+            with AllowBlocking():
+                self.remote_node2 = self.network1.add_node(3, SAMPLE_EDS)
             self.local_node2 = self.network2.create_node(3, SAMPLE_EDS)
 
     def tearDown(self):

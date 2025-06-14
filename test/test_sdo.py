@@ -2,6 +2,7 @@ import unittest
 import asyncio
 
 import canopen
+from canopen.async_guard import AllowBlocking
 import canopen.objectdictionary.datatypes as dt
 from canopen.objectdictionary import ODVariable
 
@@ -101,7 +102,8 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         network = canopen.Network(loop=loop)
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.send_message = self._send_message
-        node = network.add_node(2, SAMPLE_EDS)
+        with AllowBlocking():
+            node = network.add_node(2, SAMPLE_EDS)
         node.sdo.RESPONSE_TIMEOUT = 0.01
         self.network = network
 
@@ -599,7 +601,7 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(RuntimeError):
                 _ = self.network[2].sdo[0x1018][1].raw
         else:
-            raise self.skipTest("No async protection test needed in sync mode")
+            self.skipTest("No async protection test needed in sync mode")
 
 
 class TestSDOSync(TestSDO):
@@ -641,7 +643,8 @@ class TestSDOClientDatatypes(unittest.IsolatedAsyncioTestCase):
         network = canopen.Network(loop=loop)
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.send_message = self._send_message
-        node = network.add_node(2, DATATYPES_EDS)
+        with AllowBlocking():
+            node = network.add_node(2, DATATYPES_EDS)
         node.sdo.RESPONSE_TIMEOUT = 0.01
         self.node = node
         self.network = network
@@ -988,7 +991,7 @@ class TestSDOClientDatatypes(unittest.IsolatedAsyncioTestCase):
 
     async def test_unknown_datatype32(self):
         """Test an unknown datatype, but known OD, of 32 bits (4 bytes)."""
-        raise self.skipTest("Datatype conditionals are not fixed yet, see #436")
+        self.skipTest("Datatype conditionals are not fixed yet, see #436")
         # Add fake entry 0x2100 to OD, using fake datatype 0xFF
         if 0x2100 not in self.node.object_dictionary:
             fake_var = ODVariable("Fake", 0x2100)
@@ -1006,7 +1009,7 @@ class TestSDOClientDatatypes(unittest.IsolatedAsyncioTestCase):
 
     async def test_unknown_datatype112(self):
         """Test an unknown datatype, but known OD, of 112 bits (14 bytes)."""
-        raise self.skipTest("Datatype conditionals are not fixed yet, see #436")
+        self.skipTest("Datatype conditionals are not fixed yet, see #436")
         # Add fake entry 0x2100 to OD, using fake datatype 0xFF
         if 0x2100 not in self.node.object_dictionary:
             fake_var = ODVariable("Fake", 0x2100)

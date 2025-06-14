@@ -100,7 +100,7 @@ class TestEmcy(unittest.IsolatedAsyncioTestCase):
 
     async def test_emcy_consumer_wait(self):
         if self.use_async:
-            raise unittest.SkipTest("Not implemented for async")
+            self.skipTest("Not implemented for async")
 
         PAUSE = TIMEOUT / 2
 
