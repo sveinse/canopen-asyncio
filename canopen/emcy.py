@@ -20,9 +20,9 @@ class EmcyConsumer:
 
     def __init__(self):
         #: Log of all received EMCYs for this node
-        self.log: List[EmcyError] = []
+        self.log: List["EmcyError"] = []
         #: Only active EMCYs. Will be cleared on Error Reset
-        self.active: List[EmcyError] = []
+        self.active: List["EmcyError"] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
@@ -46,7 +46,7 @@ class EmcyConsumer:
         # Call all registered callbacks
         self.network.dispatch_callbacks(self.callbacks, entry)
 
-    def add_callback(self, callback: Callable[[EmcyError], None]):
+    def add_callback(self, callback: Callable[["EmcyError"], None]):
         """Get notified on EMCY messages from this node.
 
         :param callback:
@@ -63,7 +63,7 @@ class EmcyConsumer:
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
-    ) -> EmcyError:
+    ) -> "EmcyError":
         """Wait for a new EMCY to arrive.
 
         :param emcy_code: EMCY code to wait for

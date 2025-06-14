@@ -3,7 +3,6 @@ import logging
 import queue
 import struct
 import time
-from typing import Optional, TYPE_CHECKING
 
 from canopen.async_guard import ensure_not_async
 import canopen.network
@@ -89,6 +88,8 @@ class LssMaster:
         self._node_id = 0
         self._data = None
         self.responses = queue.Queue()
+
+    # FIXME: Async implementation of the public methods in this class
 
     def send_switch_state_global(self, mode):
         """switch mode to CONFIGURATION_STATE or WAITING_STATE
@@ -244,7 +245,6 @@ class LssMaster:
         message[0] = CS_IDENTIFY_NON_CONFIGURED_REMOTE_SLAVE
         self.__send_command(message)
 
-    # FIXME: Make async implementation "afast_scan"
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def fast_scan(self):
         """This command sends a series of fastscan message
@@ -290,6 +290,10 @@ class LssMaster:
 
         return False, None
 
+    async def afast_scan(self):
+        """Asynchronous version of fast_scan"""
+        return await asyncio.to_thread(self.fast_scan)
+
     def __send_fast_scan_message(self, id_number, bit_checker, lss_sub, lss_next):
         message = bytearray(8)
         message[0:8] = struct.pack('<BIBBB', CS_FAST_SCAN, id_number, bit_checker, lss_sub, lss_next)
@@ -304,7 +308,6 @@ class LssMaster:
 
         return False
 
-    # FIXME: Make async implementation "__asend_lss_address"
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def __send_lss_address(self, req_cs, number):
         message = bytearray(8)
@@ -370,8 +373,6 @@ class LssMaster:
             error_msg = f"LSS Error: {error_code}"
             raise LssError(error_msg)
 
-    # FIXME: Make async implementation "__asend_command"
-
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def __send_command(self, message):
         """Send a LSS operation code to the network
@@ -389,8 +390,8 @@ class LssMaster:
 
         response = None
         if not self.responses.empty():
-            logger.info("There were unexpected messages in the queue")
             # FIXME: Recreating the queue
+            logger.warning("There were unexpected messages in the queue")
             self.responses = queue.Queue()
 
         self.network.send_message(self.LSS_TX_COBID, message)

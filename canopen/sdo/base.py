@@ -7,8 +7,8 @@ from typing import Iterator, Optional, Union
 import canopen.network
 from canopen import objectdictionary
 from canopen import variable
-from canopen.utils import pretty_index
 from canopen.async_guard import ensure_not_async
+from canopen.utils import pretty_index
 
 
 class CrcXmodem:

@@ -11,37 +11,78 @@ The library supports Python 3.8 or newer.
 This library is the asyncio port of CANopen. See below for code example.
 
 
-Branch notes
-------------
-This branch is work in progress, where the intent is to concept test running
-the backend callbacks and unchanged from the sync version. The sync-async
-crossing is done via sync waiting via `asyncio.to_thread()` in each class
-that needs it.
-
-The goal was to simplify the impact of the async changes. Having an async
-backend requires a lot of duplication of code.
-
-
-Async status
+Asyncio port
 ------------
 
-The remaining work for feature complete async implementation:
+The objective of the library is to provide a canopen implementation in
+either async or non-async environment, with suitable API for both.
 
-* Implement :code:`ABlockUploadStream`, :code:`ABlockDownloadStream` and
-  :code:`ATextIOWrapper` for async in :code:`SdoClient`
+To minimize the impact of the async changes, this port is designed to use the
+existing synchronous backend of the library. This means that the library
+uses :code:`asyncio.to_thread()` for many asynchronous operations.
 
-* Implement :code:`EcmyConsumer.wait()` for async
+This port remains compatible with using it in a regular non-asyncio
+environment. This is selected with the `loop` parameter in the
+:code:`Network` constructor. If you pass a valid asyncio event loop, the
+library will run in async mode. If you pass `loop=None`, it will run in
+regular blocking mode. It cannot be used in both modes at the same time.
 
-* Implement async in :code:`LssMaster``
 
-* Async implementation of :code:`BaseNode402`
+Difference between async and non-async version
+----------------------------------------------
 
-* Implement async variant of :code:`Network.add_node`. This will probably also
-  add need of async variant of :code:`input_from_node` in eds.py
+This port have some differences with the upstream non-async version of canopen.
 
-* Update unittests for async
+* The :code:`Network` accepts additional parameters than upstream. It accepts
+  :code:`loop` which selects the mode of operation. If :code:`None` it will
+  run in blocking mode, otherwise it will run in async mode. It supports
+  providing a custom CAN :code:`notifier` if the CAN bus will be shared by
+  multiple protocols.
 
-* Update documentation and examples
+* The :code:`Network` class can be (and should be) used in an async context
+  manager. This will ensure the network will be automatically disconnected when
+  exiting the context. See the example below.
+
+* Most async functions follow an "a" prefix naming scheme.
+  E.g. the async variant for :code:`SdoClient.download()` is available
+  as :code:`SdoClient.adownload()`.
+
+* Variables in the regular canopen library uses properties for getting and
+  setting. This is replaced with awaitable methods in the async version.
+
+      var = sdo['Variable'].raw  # synchronous
+      sdo['Variable'].raw = 12   # synchronous
+
+      var = await sdo['Variable'].get_raw()  # async
+      await sdo['Variable'].set_raw(12)      # async
+
+* Installed :code:`ensure_not_async()` sentinel guard in functions which
+  prevents calling blocking functions in async context. It will raise the
+  exception :code:`RuntimeError` "Calling a blocking function" when this
+  happen. If this is encountered, it is likely that the code is not using the
+  async variants of the library.
+
+* The mechanism for CAN bus callbacks have been changed. Callbacks might be
+  async, which means they cannot be called immediately. This affects how
+  error handling is done in the library.
+
+* The callbacks to the message handlers have been changed to be handled by
+  :code:`Network.dispatch_callbacks()`. They are no longer called with any
+  locks held, as this would not work with async. This affects:
+    * :code:`PdoMaps.on_message`
+    * :code:`EmcyConsumer.on_emcy`
+    * :code:`NtmMaster.on_heartbaet`
+
+* SDO block upload and download is not yet supported in async mode.
+
+* :code:`ODVariable.__len__()` returns 64 bits instead of 8 bits to support
+  truncated 24-bits integers, see #436
+
+* :code:`BaseNode402` does not work with async
+
+* :code:`LssMaster` does not work with async, except :code:`LssMaster.fast_scan()`
+
+* :code:`Bits` is not working in async
 
 
 Features
@@ -194,7 +235,7 @@ The :code:`n` is the PDO index (normally 1 to 4). The second form of access is f
 Asyncio
 -------
 
-This library can be used with asyncio.
+This is the same example as above, but using asyncio
 
 .. code-block:: python
 
@@ -237,22 +278,20 @@ This library can be used with asyncio.
 
     async def main():
 
-        # Start with creating a network representing one CAN bus
-        network = canopen.Network()
-
         # Connect to the CAN bus
         # Arguments are passed to python-can's can.Bus() constructor
         # (see https://python-can.readthedocs.io/en/latest/bus.html).
         # Note the loop parameter to enable asyncio operation
-        loop = asyncio.get_event_loop()
-        network.connect(interface='pcan', bitrate=1000000, loop=loop)
+        loop = asyncio.get_running_loop()
+        async with canopen.Network(loop=loop).connect(
+                interface='pcan', bitrate=1000000) as network:
 
-        # Create two independent tasks for two nodes 51 and 52 which will run concurrently
-        task1 = asyncio.create_task(my_node(network, 51, '/path/to/object_dictionary.eds'))
-        task2 = asyncio.create_task(my_node(network, 52, '/path/to/object_dictionary.eds'))
+            # Create two independent tasks for two nodes 51 and 52 which will run concurrently
+            task1 = asyncio.create_task(my_node(network, 51, '/path/to/object_dictionary.eds'))
+            task2 = asyncio.create_task(my_node(network, 52, '/path/to/object_dictionary.eds'))
 
-        # Wait for both to complete (which will never happen)
-        await asyncio.gather((task1, task2))
+            # Wait for both to complete (which will never happen)
+            await asyncio.gather((task1, task2))
 
     asyncio.run(main())
 

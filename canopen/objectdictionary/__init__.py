@@ -393,7 +393,7 @@ class ODVariable:
         if self.data_type in self.STRUCT_TYPES:
             return self.STRUCT_TYPES[self.data_type].size * 8
         else:
-            # FIXME: Temporary fix for trucated 24-bit integers
+            # FIXME: Temporary fix for trucated 24-bit integers, see #436
             return 64
 
     @property

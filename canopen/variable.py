@@ -3,6 +3,7 @@ from collections.abc import Mapping
 from typing import Union
 
 from canopen import objectdictionary
+from canopen.async_guard import ensure_not_async
 from canopen.utils import pretty_index
 
 
@@ -227,8 +228,10 @@ class Variable:
 
 class Bits(Mapping):
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def __init__(self, variable: Variable):
         self.variable = variable
+        # FIXME: This is not compatible with async
         self.read()
 
     @staticmethod
@@ -261,5 +264,8 @@ class Bits(Mapping):
     def write(self):
         self.variable.raw = self.raw
 
-    # FIXME: Implement aread() and awrite()
+    async def aread(self):
+        self.raw = await self.variable.aget_raw()
 
+    async def awrite(self):
+        await self.variable.aset_raw(self.raw)

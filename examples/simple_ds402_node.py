@@ -100,7 +100,6 @@ try:
     while node.state != 'READY TO SWITCH ON':
         if time.time() > timeout:
             raise Exception('Timeout when trying to change state')
-        # NOTE: Blocking
         time.sleep(0.001)
 
     timeout = time.time() + 15
@@ -108,7 +107,6 @@ try:
     while node.state != 'SWITCHED ON':
         if time.time() > timeout:
             raise Exception('Timeout when trying to change state')
-        # NOTE: Blocking
         time.sleep(0.001)
 
     timeout = time.time() + 15
@@ -116,7 +114,6 @@ try:
     while node.state != 'OPERATION ENABLED':
         if time.time() > timeout:
             raise Exception('Timeout when trying to change state')
-        # NOTE: Blocking
         time.sleep(0.001)
 
     print(f'Node Status {node.powerstate_402.state}')
@@ -139,7 +136,6 @@ try:
         print(f'statusword: {statusword}')
         print(f'VEL: {speed}')
 
-        # NOTE: Blocking
         time.sleep(0.01)
 
 except KeyboardInterrupt:

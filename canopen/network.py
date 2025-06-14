@@ -9,7 +9,7 @@ from typing import Callable, Dict, Final, Iterator, List, Optional, Union
 import can
 from can import Listener
 
-from canopen.async_guard import set_async_sentinel
+from canopen.async_guard import set_async_sentinel, ensure_not_async
 from canopen.lss import LssMaster
 from canopen.nmt import NmtMaster
 from canopen.node import LocalNode, RemoteNode
@@ -30,6 +30,7 @@ class Network(MutableMapping):
     NOTIFIER_CYCLE: float = 1.0  #: Maximum waiting time for one notifier iteration.
     NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
 
+    # NOTE: Function arguments changed to provide notifier, see #556
     def __init__(self, bus: Optional[can.BusABC] = None, notifier: Optional[can.Notifier] = None,
                  loop: Optional[asyncio.AbstractEventLoop] = None):
         """
@@ -164,8 +165,8 @@ class Network(MutableMapping):
     async def __aexit__(self, type, value, traceback):
         self.disconnect()
 
-    # FIXME: Implement async "aadd_node"
-
+    # NOTE: Disable this test for now because tests depend on it
+    # @ensure_not_async  # NOTE: Safeguard for accidental async use
     def add_node(
         self,
         node: Union[int, RemoteNode, LocalNode],
@@ -194,6 +195,20 @@ class Network(MutableMapping):
             node = RemoteNode(node, object_dictionary)
         self[node.id] = node
         return node
+
+    async def aadd_node(
+        self,
+        node: Union[int, RemoteNode, LocalNode],
+        object_dictionary: Union[str, ObjectDictionary, None] = None,
+        upload_eds: bool = False,
+    ) -> RemoteNode:
+        """Add a remote node to the network, async variant.
+
+        See add_node() for description
+        """
+        # NOTE: The async variant exists because import_from_node might block
+        return await asyncio.to_thread(self.add_node, node,
+                                       object_dictionary, upload_eds)
 
     def create_node(
         self,

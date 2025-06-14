@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TextIO, Union, List
+from typing import TextIO, Union
 
 import canopen.network
 from canopen.emcy import EmcyConsumer
@@ -39,7 +39,7 @@ class RemoteNode(BaseNode):
         #: Enable WORKAROUND for reversed PDO mapping entries
         self.curtis_hack = False
 
-        self.sdo_channels: List[SdoClient] = []
+        self.sdo_channels = []
         self.sdo = self.add_sdo(0x600 + self.id, 0x580 + self.id)
         self.tpdo = TPDO(self)
         self.rpdo = RPDO(self)

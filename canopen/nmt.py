@@ -252,6 +252,7 @@ class NmtSlave(NmtBase):
         # The heartbeat service should start on the transition
         # between INITIALIZING and PRE-OPERATIONAL state
         if old_state == 0 and self._state == 127:
+            # FIXME: Document why this was fixed
             if self._heartbeat_time_ms == 0:
                 # NOTE: Blocking - protected in SdoClient
                 heartbeat_time_ms = self._local_node.sdo[0x1017].raw

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import can
 import canopen
 
 # Set logging output
@@ -11,14 +10,14 @@ log = logging.getLogger(__name__)
 async def do_loop(network: canopen.Network, nodeid):
 
     # Create the node object and load the OD
-    node: canopen.RemoteNode = network.add_node(nodeid, 'eds/e35.eds')
+    node: canopen.RemoteNode = await network.aadd_node(nodeid, 'eds/e35.eds')
 
     # Get the PDOs from the remote
-    await node.tpdo.aread()
-    await node.rpdo.aread()
+    await node.tpdo.aread(from_od=False)
+    await node.rpdo.aread(from_od=False)
 
     # Set the remote state
-    node.nmt.set_state('OPERATIONAL')
+    node.nmt.state = 'OPERATIONAL'
 
     # Set SDO
     await node.sdo['something'].aset_raw(2)
@@ -33,8 +32,8 @@ async def do_loop(network: canopen.Network, nodeid):
             continue
 
         # Get TPDO value
-        # FIXME: Is this ok?
-        state = node.tpdo[1]['state'].get_raw()
+        # PDO values are accessed non-synchronously using attributes
+        state = node.tpdo[1]['state'].raw
 
         # If state send RPDO to remote
         if state == 5:
@@ -42,27 +41,25 @@ async def do_loop(network: canopen.Network, nodeid):
             await asyncio.sleep(0.2)
 
             # Set RPDO and transmit
-            # FIXME: Using set_phys() ok?
-            node.rpdo[1]['count'].set_phys(i)
+            node.rpdo[1]['count'].phys = i
             node.rpdo[1].transmit()
 
 
 async def amain():
 
-    bus = can.Bus(interface='pcan', bitrate=1000000, recieve_own_messages=True)
+    # Create the canopen network and connect it to the CAN bus
+    loop = asyncio.get_running_loop()
+    async with canopen.Network(loop=loop).connect(
+        interface='virtual', bitrate=1000000, recieve_own_messages=True
+    ) as network:
 
-    network = canopen.Network()
-    network.bus = bus
-
-    # Start the notifier
-    loop = asyncio.get_event_loop()
-    can.Notifier(bus, network.listeners, loop=loop)
-
-    # Start two instances and run them concurrently
-    await asyncio.gather(
-        asyncio.create_task(do_loop(network, 20)),
-        asyncio.create_task(do_loop(network, 21)),
-    )
+        # Start two instances and run them concurrently
+        # NOTE: It is better to use asyncio.TaskGroup to manage tasks, but this
+        # is not available before Python 3.11.
+        await asyncio.gather(
+            asyncio.create_task(do_loop(network, 20)),
+            asyncio.create_task(do_loop(network, 21)),
+        )
 
 
 def main():

@@ -41,7 +41,7 @@ class PdoBase(Mapping):
     def __iter__(self):
         return iter(self.map)
 
-    def __getitem__(self, key) -> PdoBase:
+    def __getitem__(self, key):
         if isinstance(key, int) and (0x1A00 <= key <= 0x1BFF or   # By TPDO ID (512)
                                      0x1600 <= key <= 0x17FF or   # By RPDO ID (512)
                                      0 < key <= 512):             # By PDO Index
@@ -350,7 +350,12 @@ class PdoMap:
         self.callbacks.append(callback)
 
     def read_generator(self):
-        """Read PDO configuration for this map."""
+        """Generator to run through steps for reading the PDO configuration
+        for this map.
+
+        This function does not do any io. This must be done by the caller.
+
+        """
         cob_id = yield self.com_record[1]
         self.cob_id = cob_id & 0x1FFFFFFF
         logger.info("COB-ID is 0x%X", self.cob_id)
@@ -454,7 +459,12 @@ class PdoMap:
                 break
 
     def save_generator(self):
-        """Save PDO configuration for this map using SDO."""
+        """Generator to run through steps for saving the PDO configuration
+        using SDO.
+
+        This function does not do any io. This must be done by the caller.
+
+        """
         if self.cob_id is None:
             logger.info("Skip saving %s: COB-ID was never set", self.com_record.od.name)
             return
@@ -482,14 +492,9 @@ class PdoMap:
                 # mappings for an invalid object 0x0000:00 to overwrite any
                 # excess entries with all-zeros.
                 #
-                # Async adoption:
-                # Original code
-                #    self._fill_map(self.map_array[0].get_raw())
-                # This function is called from both sync and async, so it cannot
-                # be executed as is. Instead the special value '@@get' is yielded
-                # in order for the save() and asave() to execute the actual
-                # action.
-                yield self.map_array[0], '@@get'
+                # The '@@fill_map' yield will run 
+                #    self._fill_map(self.map_array[0].raw())
+                yield self.map_array[0], '@@fill_map'
             subindex = 1
             for var in self.map:
                 logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
@@ -526,8 +531,7 @@ class PdoMap:
     def save(self) -> None:
         """Read PDO configuration for this map using SDO."""
         for sdo, value in self.save_generator():
-            if value == '@@get':
-                # NOTE: Sync implementation of the WORKAROUND in save_generator()
+            if value == '@@fillmap':
                 # NOTE: Blocking - protected in SdoClient
                 self._fill_map(sdo.raw)
             else:
@@ -537,8 +541,7 @@ class PdoMap:
     async def asave(self) -> None:
         """Read PDO configuration for this map using SDO, async variant."""
         for sdo, value in self.save_generator():
-            if value == '@@get':
-                # NOTE: Async implementation of the WORKAROUND in save_generator()
+            if value == '@@fillmap':
                 self._fill_map(await sdo.aget_raw())
             else:
                 await sdo.aset_raw(value)
