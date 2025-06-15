@@ -429,6 +429,16 @@ class ODVariable:
             # Strip any trailing NUL characters from C-based systems
             return data.decode("utf_16_le", errors="ignore").rstrip("\x00")
         elif self.data_type in self.STRUCT_TYPES:
+            size = self.STRUCT_TYPES[self.data_type].size
+            logger.warning(f"Decoding data {data!r} of type 0x%X at %s",
+                           self.data_type, pretty_index(self.index, self.subindex))
+            logger.warning(f"Size: {size} bytes, data length: {len(data)} bytes")
+            if len(data) > size:
+                logger.warning("Excessive data in %s. Data type 0x%X expects %s bytes, got %s",
+                               pretty_index(self.index, self.subindex), self.data_type,
+                               size, len(data))
+                # Truncate the data to the expected size
+                data = data[:size]
             try:
                 value, = self.STRUCT_TYPES[self.data_type].unpack(data)
                 return value
