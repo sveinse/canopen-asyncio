@@ -168,7 +168,7 @@ class SdoArray(Mapping):
         return self[0].raw
 
     async def alen(self) -> int:
-        return await self[0].aget_raw()
+        return await self[0].aget_raw()  # type: ignore[return-value]
 
     def __contains__(self, subindex: int) -> bool:
         return 0 <= subindex <= len(self)

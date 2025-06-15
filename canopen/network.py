@@ -39,7 +39,7 @@ class Network(MutableMapping):
         """
         #: A python-can :class:`can.BusABC` instance which is set after
         #: :meth:`canopen.Network.connect` is called
-        self.bus: Optional[BusABC] = bus
+        self.bus: Optional[can.BusABC] = bus
         self.loop: Optional[asyncio.AbstractEventLoop] = loop
         self._tasks: set[asyncio.Task] = set()
         #: A :class:`~canopen.network.NodeScanner` for detecting nodes

@@ -33,6 +33,8 @@ Difference between async and non-async version
 
 This port have some differences with the upstream non-async version of canopen.
 
+* Minimum python version is 3.9, while the upstream version supports 3.8.
+
 * The :code:`Network` accepts additional parameters than upstream. It accepts
   :code:`loop` which selects the mode of operation. If :code:`None` it will
   run in blocking mode, otherwise it will run in async mode. It supports

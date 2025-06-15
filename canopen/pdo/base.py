@@ -664,7 +664,7 @@ class PdoMap:
         :param float timeout: Max time to wait in seconds.
         :return: Timestamp of message received or None if timeout.
         """
-        await asyncio.to_thread(self.wait_for_reception, timeout)
+        return await asyncio.to_thread(self.wait_for_reception, timeout)
 
 
 class PdoVariable(variable.Variable):

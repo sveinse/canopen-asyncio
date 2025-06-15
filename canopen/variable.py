@@ -118,7 +118,7 @@ class Variable:
         either a :class:`float` or an :class:`int`.
         Non integers will be passed as is.
         """
-        return self._get_phys(self.get_raw())
+        return self._get_phys(self.raw)
 
     async def aget_phys(self) -> Union[int, bool, float, str, bytes]:
         """Physical value scaled with some factor (defaults to 1), async variant."""
@@ -193,6 +193,7 @@ class Variable:
             return await self.aget_phys()
         elif fmt == "desc":
             return await self.aget_desc()
+        raise ValueError(f"Unknown format '{fmt}'")
 
     def write(
         self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
@@ -223,7 +224,7 @@ class Variable:
         elif fmt == "phys":
             await self.aset_phys(value)
         elif fmt == "desc":
-            await self.aset_desc(value)
+            await self.aset_desc(value)  # type: ignore[arg-type]
 
 
 class Bits(Mapping):
