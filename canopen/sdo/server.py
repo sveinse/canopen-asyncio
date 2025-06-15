@@ -124,7 +124,7 @@ class SdoServer(SdoBase):
     def block_download(self, data):
         # We currently don't support BLOCK DOWNLOAD
         # Unpack the index and subindex in order to send appropriate abort
-        # FIXME: Add issue upstream
+        # FIXME: See upstream #590
         command, index, subindex = SDO_STRUCT.unpack_from(data)
         self._index = index
         self._subindex = subindex
