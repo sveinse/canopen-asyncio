@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "setuptools_scm>=8"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
@@ -38,20 +38,26 @@ db_export = [
 documentation = "https://canopen.readthedocs.io/en/stable/"
 repository = "https://github.com/sveinse/canopen-asyncio"
 
+[tool.hatch]
+version.source = "vcs"
+build.hooks.vcs.version-file = "canopen/_version.py"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+
 [tool.hatch.build.targets.wheel]
 packages = ["canopen"]
 
 [tool.hatch.build.targets.wheel.sources]
 "canopen" = "canopen_asyncio"
 
-[tool.hatch.version]
-path = "canopen/_version.py"
-pattern = "version = '(?P<version>[^']+)'"
-
 [tool.hatch.build.targets.sdist]
 include = [
   "canopen/*.py",
+  "canopen/*/*.py",
+  "canopen/*/*/*.py",
   "/test",
+  "/doc",
 ]
 
 [tool.setuptools_scm]
