@@ -9,7 +9,7 @@ automation tasks rather than a standard compliant master implementation.
 The library supports Python 3.8 or newer.
 
 This library is the asyncio port of CANopen. It is a fork of the upstream
-canopen_ library, adding support for running in an asyncio environment.
+python-canopen_ library, adding support for running in an asyncio environment.
 
 .. note::
 
@@ -158,6 +158,7 @@ This port have some differences with the upstream non-async version of canopen.
 * The callbacks to the message handlers have been changed to be handled by
   :code:`Network.dispatch_callbacks()`. They are no longer called with any
   locks held, as this would not work with async. This affects:
+
     * :code:`PdoMaps.on_message`
     * :code:`EmcyConsumer.on_emcy`
     * :code:`NtmMaster.on_heartbaet`
@@ -263,7 +264,7 @@ logging_ level:
 
 
 .. _PyPI: https://pypi.org/project/canopen-asyncio/
-.. _canopen: https://pypi.org/project/canopen/
+.. _python-canopen: https://pypi.org/project/canopen/
 .. _CANopen: https://www.can-cia.org/canopen/
 .. _python-can: https://python-can.readthedocs.org/en/stable/
 .. _Sphinx: http://www.sphinx-doc.org/
