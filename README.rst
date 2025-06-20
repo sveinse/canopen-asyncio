@@ -6,7 +6,7 @@ The aim of the project is to support the most common parts of the CiA 301
 standard in a simple Pythonic interface. It is mainly targeted for testing and
 automation tasks rather than a standard compliant master implementation.
 
-The library supports Python 3.8 or newer.
+The library supports Python 3.9 or newer.
 
 This library is the asyncio port of CANopen. It is a fork of the upstream
 canopen_ library, adding support for running in an asyncio environment.
@@ -178,7 +178,7 @@ This port have some differences with the upstream non-async version of canopen.
 Quick start
 -----------
 
-Here are some quick examples of what you can do:
+Here are some quick examples of what you can do with the async port:
 
 .. code-block:: python
 
@@ -265,7 +265,7 @@ logging_ level:
 
 .. _PyPI: https://pypi.org/project/canopen-asyncio/
 .. _canopen: https://pypi.org/project/canopen/
-.. _CANopen standard: https://www.can-cia.org/canopen/
+.. _CANopen standard: https://www.can-cia.org/can-knowledge
 .. _python-can: https://python-can.readthedocs.org/en/stable/
 .. _Sphinx: http://www.sphinx-doc.org/
 .. _develop mode: https://packaging.python.org/distributing/#working-in-development-mode
