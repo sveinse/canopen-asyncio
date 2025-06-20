@@ -133,7 +133,6 @@ class ObjectDictionary(MutableMapping):
         self, index: Union[int, str]
     ) -> Union[ODArray, ODRecord, ODVariable]:
         """Get object from object dictionary by name or index."""
-        # FIXME: See upstream #588
         item = self.names.get(index)
         if item is None:
             item = self.indices.get(index)
@@ -422,6 +421,12 @@ class ODVariable:
         :param bits: List of bits as integers
         """
         self.bit_definitions[name] = bits
+
+    @property
+    def fixed_size(self) -> bool:
+        """Indicate whether the amount of needed data is known in advance."""
+        # Only for types which we parse using a structure.
+        return self.data_type in self.STRUCT_TYPES
 
     def decode_raw(self, data: bytes) -> Union[int, float, str, bytes, bytearray]:
         if self.data_type == VISIBLE_STRING:

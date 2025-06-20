@@ -142,9 +142,7 @@ class SdoClient(SdoBase):
         var = self.od.get_variable(index, subindex)
         if var is not None:
             # Found a matching variable in OD
-            # If this is a data type (string, domain etc) the size is
-            # unknown anyway so keep the data as is
-            if var.data_type not in objectdictionary.DATA_TYPES:
+            if var.fixed_size:
                 # Get the size in bytes for this variable
                 var_size = len(var) // 8
                 if size is None or var_size < size:
@@ -727,7 +725,6 @@ class BlockDownloadStream(io.RawIOBase):
         logger.debug("Server requested a block size of %d", self._blksize)
         self.crc_supported = bool(res_command & CRC_SUPPORTED)
         # Run this last, used later to determine if initialization was successful
-        # FIXME: Upstream #590
         self._initialized = True
 
     def write(self, b):
@@ -844,8 +841,7 @@ class BlockDownloadStream(io.RawIOBase):
         if self.closed:
             return
         super(BlockDownloadStream, self).close()
-        # FIXME: Upstream #590
-        if not hasattr(self, "_initialized"):
+        if not getattr(self, "_initialized", False):
             # Don't do finalization if initialization was not successful
             return
         if not self._done:

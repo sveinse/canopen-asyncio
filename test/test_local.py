@@ -83,6 +83,18 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             sampling_rate = self.remote_node.sdo["Sensor Sampling Rate (Hz)"].raw
         self.assertAlmostEqual(sampling_rate, 5.2, places=2)
 
+    async def test_upload_zero_length(self):
+        if self.use_async:
+            await self.local_node.sdo["Manufacturer device name"].aset_raw(b"")
+            with self.assertRaises(canopen.SdoAbortedError) as error:
+                await self.remote_node.sdo["Manufacturer device name"].aget_data()
+        else:
+            self.local_node.sdo["Manufacturer device name"].raw = b""
+            with self.assertRaises(canopen.SdoAbortedError) as error:
+                self.remote_node.sdo["Manufacturer device name"].data
+        # Should be No data available
+        self.assertEqual(error.exception.code, 0x0800_0024)
+
     async def test_segmented_upload(self):
         if self.use_async:
             await self.local_node.sdo["Manufacturer device name"].aset_raw("Some cool device")
