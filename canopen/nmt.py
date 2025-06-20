@@ -5,8 +5,8 @@ import threading
 import time
 from typing import Callable, Dict, Final, List, Optional, TYPE_CHECKING
 
-from canopen.async_guard import ensure_not_async
-import canopen.network
+from canopen_asyncio.async_guard import ensure_not_async
+from canopen_asyncio import canopen
 
 if TYPE_CHECKING:
     from canopen.network import PeriodicMessageTask

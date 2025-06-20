@@ -4,8 +4,8 @@ import queue
 import struct
 import time
 
-from canopen.async_guard import ensure_not_async
-import canopen.network
+from canopen_asyncio.async_guard import ensure_not_async
+from canopen_asyncio import canopen
 
 
 logger = logging.getLogger(__name__)

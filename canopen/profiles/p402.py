@@ -3,10 +3,10 @@ import logging
 import time
 from typing import Dict
 
-from canopen.async_guard import ensure_not_async
-from canopen.node import RemoteNode
-from canopen.pdo import PdoMap
-from canopen.sdo import SdoCommunicationError
+from canopen_asyncio.async_guard import ensure_not_async
+from canopen_asyncio.node import RemoteNode
+from canopen_asyncio.pdo import PdoMap
+from canopen_asyncio.sdo import SdoCommunicationError
 
 """
 NOTE: Async compatibility

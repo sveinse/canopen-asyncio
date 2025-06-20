@@ -1,21 +1,108 @@
 CANopen for Python, asyncio port
 ================================
 
-A Python implementation of the CANopen_ standard.
+A Python implementation of the `CANopen standard`_.
 The aim of the project is to support the most common parts of the CiA 301
 standard in a simple Pythonic interface. It is mainly targeted for testing and
 automation tasks rather than a standard compliant master implementation.
 
-The library supports Python 3.8 or newer.
+The library supports Python 3.9 or newer.
 
-This library is the asyncio port of CANopen. See below for code example.
+This library is the asyncio port of CANopen. It is a fork of the upstream
+canopen_ library, adding support for running in an asyncio environment.
+
+NOTE
+-----
+
+There is ongoing work to merge this asyncio port back into the upstream
+canopen library. This is not yet complete, and this package was created to
+be able to use the asyncio port in the meantime. When the merge is
+complete, this package will be deprecated and the upstream library will
+support asyncio natively.
+
+See `canopen asyncio issue`_ and `canopen asyncio PR`_ for more information
+about the merge.
+
+
+Features
+--------
+
+The library is mainly meant to be used as a master.
+
+* NMT master
+* SDO client
+* PDO producer/consumer
+* SYNC producer
+* EMCY consumer
+* TIME producer
+* LSS master
+* Object Dictionary from EDS
+* 402 profile support
+
+Incomplete support for creating slave nodes also exists.
+
+* SDO server
+* PDO producer/consumer
+* NMT slave
+* EMCY producer
+* Object Dictionary from EDS
+
+
+Installation
+------------
+
+Install from PyPI_ using :code:`pip`::
+
+    $ pip install canopen-asyncio
+
+Install from latest ``master`` on GitHub::
+
+    $ pip install https://github.com/sveinse/canopen-asyncio/archive/main.zip
+
+If you want to be able to change the code while using it, clone it then install
+it in `develop mode`_::
+
+    $ git clone https://github.com/sveinse/canopen-asyncio.git
+    $ cd canopen-asyncio
+    $ pip install -e .
+
+Unit tests can be run using the pytest_ framework::
+
+    $ pip install -r requirements-dev.txt
+    $ pytest -v
+
+You can also use :code:`unittest` standard library module::
+
+    $ python3 -m unittest discover test -v
+
+
+Documentation
+-------------
+
+**NOTE:** The documentation is not yet updated for the asyncio port. These docs
+are for the upstream canopen library.
+
+Documentation can be found on Read the Docs:
+
+http://canopen.readthedocs.io/en/latest/
+
+It can also be generated from a local clone using Sphinx_::
+
+    $ pip install -r doc/requirements.txt
+    $ make -C doc html
+
+
+Hardware support
+----------------
+
+This library supports multiple hardware and drivers through the python-can_ package.
+See `the list of supported devices <https://python-can.readthedocs.io/en/stable/configuration.html#interface-names>`_.
+
+It is also possible to integrate this library with a custom backend.
 
 
 Asyncio port
 ------------
-
-The objective of the library is to provide a canopen implementation in
-either async or non-async environment, with suitable API for both.
 
 To minimize the impact of the async changes, this port is designed to use the
 existing synchronous backend of the library. This means that the library
@@ -71,6 +158,7 @@ This port have some differences with the upstream non-async version of canopen.
 * The callbacks to the message handlers have been changed to be handled by
   :code:`Network.dispatch_callbacks()`. They are no longer called with any
   locks held, as this would not work with async. This affects:
+
     * :code:`PdoMaps.on_message`
     * :code:`EmcyConsumer.on_emcy`
     * :code:`NtmMaster.on_heartbaet`
@@ -87,157 +175,10 @@ This port have some differences with the upstream non-async version of canopen.
 * :code:`Bits` is not working in async
 
 
-Features
---------
-
-The library is mainly meant to be used as a master.
-
-* NMT master
-* SDO client
-* PDO producer/consumer
-* SYNC producer
-* EMCY consumer
-* TIME producer
-* LSS master
-* Object Dictionary from EDS
-* 402 profile support
-
-Incomplete support for creating slave nodes also exists.
-
-* SDO server
-* PDO producer/consumer
-* NMT slave
-* EMCY producer
-* Object Dictionary from EDS
-
-
-Installation
-------------
-
-Install from PyPI_ using :program:`pip`::
-
-    $ pip install canopen
-
-Install from latest ``master`` on GitHub::
-
-    $ pip install https://github.com/canopen-python/canopen/archive/master.zip
-
-If you want to be able to change the code while using it, clone it then install
-it in `develop mode`_::
-
-    $ git clone https://github.com/canopen-python/canopen.git
-    $ cd canopen
-    $ pip install -e .
-
-Unit tests can be run using the pytest_ framework::
-
-    $ pip install -r requirements-dev.txt
-    $ pytest -v
-
-You can also use :mod:`unittest` standard library module::
-
-    $ python3 -m unittest discover test -v
-
-Documentation
--------------
-
-Documentation can be found on Read the Docs:
-
-http://canopen.readthedocs.io/en/latest/
-
-It can also be generated from a local clone using Sphinx_::
-
-    $ pip install -r doc/requirements.txt
-    $ make -C doc html
-
-
-Hardware support
-----------------
-
-This library supports multiple hardware and drivers through the python-can_ package.
-See `the list of supported devices <https://python-can.readthedocs.io/en/stable/configuration.html#interface-names>`_.
-
-It is also possible to integrate this library with a custom backend.
-
-
 Quick start
 -----------
 
-Here are some quick examples of what you can do:
-
-The PDOs can be access by three forms:
-
-**1st:** :code:`node.tpdo[n]` or :code:`node.rpdo[n]`
-
-**2nd:** :code:`node.pdo.tx[n]` or :code:`node.pdo.rx[n]`
-
-**3rd:** :code:`node.pdo[0x1A00]` or :code:`node.pdo[0x1600]`
-
-The :code:`n` is the PDO index (normally 1 to 4). The second form of access is for backward compatibility.
-
-.. code-block:: python
-
-    import canopen
-
-    # Start with creating a network representing one CAN bus
-    network = canopen.Network()
-
-    # Add some nodes with corresponding Object Dictionaries
-    node = canopen.RemoteNode(6, '/path/to/object_dictionary.eds')
-    network.add_node(node)
-
-    # Connect to the CAN bus
-    # Arguments are passed to python-can's can.Bus() constructor
-    # (see https://python-can.readthedocs.io/en/latest/bus.html).
-    network.connect()
-    # network.connect(interface='socketcan', channel='can0')
-    # network.connect(interface='kvaser', channel=0, bitrate=250000)
-    # network.connect(interface='pcan', channel='PCAN_USBBUS1', bitrate=250000)
-    # network.connect(interface='ixxat', channel=0, bitrate=250000)
-    # network.connect(interface='vector', app_name='CANalyzer', channel=0, bitrate=250000)
-    # network.connect(interface='nican', channel='CAN0', bitrate=250000)
-
-    # Read a variable using SDO
-    device_name = node.sdo['Manufacturer device name'].raw
-    vendor_id = node.sdo[0x1018][1].raw
-
-    # Write a variable using SDO
-    node.sdo['Producer heartbeat time'].raw = 1000
-
-    # Read PDO configuration from node
-    node.tpdo.read()
-    node.rpdo.read()
-    # Re-map TPDO[1]
-    node.tpdo[1].clear()
-    node.tpdo[1].add_variable('Statusword')
-    node.tpdo[1].add_variable('Velocity actual value')
-    node.tpdo[1].add_variable('Some group', 'Some subindex')
-    node.tpdo[1].trans_type = 254
-    node.tpdo[1].event_timer = 10
-    node.tpdo[1].enabled = True
-    # Save new PDO configuration to node
-    node.tpdo[1].save()
-
-    # Transmit SYNC every 100 ms
-    network.sync.start(0.1)
-
-    # Change state to operational (NMT start)
-    node.nmt.state = 'OPERATIONAL'
-
-    # Read a value from TPDO[1]
-    node.tpdo[1].wait_for_reception()
-    speed = node.tpdo[1]['Velocity actual value'].phys
-    val = node.tpdo['Some group.Some subindex'].raw
-
-    # Disconnect from CAN bus
-    network.sync.stop()
-    network.disconnect()
-
-
-Asyncio
--------
-
-This is the same example as above, but using asyncio
+Here are some quick examples of what you can do with the async port:
 
 .. code-block:: python
 
@@ -250,15 +191,19 @@ This is the same example as above, but using asyncio
         # Create the node object and load the OD
         node = network.add_node(nodeid, od)
 
+        # Read a variable using SDO
+        device_name = await node.sdo['Manufacturer device name'].aget_raw()
+        vendor_id = await node.sdo[0x1018][1].aget_raw()
+
+        # Write a variable using SDO
+        await node.sdo['Producer heartbeat time'].aset_raw(1000)
+
         # Read the PDOs from the remote
         await node.tpdo.aread()
         await node.rpdo.aread()
 
         # Set the module state
-        node.nmt.set_state('OPERATIONAL')
-
-        # Set motor speed via SDO
-        await node.sdo['MotorSpeed'].aset_raw(2)
+        node.nmt.state = 'OPERATIONAL'
 
         while True:
 
@@ -268,14 +213,14 @@ This is the same example as above, but using asyncio
                 continue
 
             # Get the TPDO 1 value
-            rpm = node.tpdo[1]['MotorSpeed Actual'].get_raw()
-            print(f'SPEED on motor {nodeid}:', rpm)
+            speed = node.tpdo[1]['Velocity actual value'].phys
+            val = node.tpdo['Some group.Some subindex'].raw
 
             # Sleep a little
             await asyncio.sleep(0.2)
 
             # Send RPDO 1 with some data
-            node.rpdo[1]['Some variable'].set_phys(42)
+            node.rpdo[1]['Some variable'].phys = 42
             node.rpdo[1].transmit()
 
     async def main():
@@ -284,6 +229,14 @@ This is the same example as above, but using asyncio
         # Arguments are passed to python-can's can.Bus() constructor
         # (see https://python-can.readthedocs.io/en/latest/bus.html).
         # Note the loop parameter to enable asyncio operation
+        #
+        # Connect alternative interfaces:
+        # connect(interface='socketcan', channel='can0')
+        # connect(interface='kvaser', channel=0, bitrate=250000)
+        # connect(interface='pcan', channel='PCAN_USBBUS1', bitrate=250000)
+        # connect(interface='ixxat', channel=0, bitrate=250000)
+        # connect(interface='vector', app_name='CANalyzer', channel=0, bitrate=250000)
+        # connect(interface='nican', channel='CAN0', bitrate=250000)
         loop = asyncio.get_running_loop()
         async with canopen.Network(loop=loop).connect(
                 interface='pcan', bitrate=1000000) as network:
@@ -310,10 +263,13 @@ logging_ level:
     logging.basicConfig(level=logging.DEBUG)
 
 
-.. _PyPI: https://pypi.org/project/canopen/
-.. _CANopen: https://www.can-cia.org/canopen/
+.. _PyPI: https://pypi.org/project/canopen-asyncio/
+.. _canopen: https://pypi.org/project/canopen/
+.. _CANopen standard: https://www.can-cia.org/can-knowledge
 .. _python-can: https://python-can.readthedocs.org/en/stable/
 .. _Sphinx: http://www.sphinx-doc.org/
 .. _develop mode: https://packaging.python.org/distributing/#working-in-development-mode
 .. _logging: https://docs.python.org/3/library/logging.html
 .. _pytest: https://docs.pytest.org/
+.. _canopen asyncio issue: https://github.com/canopen-python/canopen/issues/272
+.. _canopen asyncio pr: https://github.com/canopen-python/canopen/pull/359

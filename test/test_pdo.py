@@ -1,6 +1,6 @@
 import unittest
 
-import canopen
+import canopen_asyncio as canopen
 
 from .util import SAMPLE_EDS, tmp_file
 

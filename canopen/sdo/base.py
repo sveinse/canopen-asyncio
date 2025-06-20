@@ -4,11 +4,11 @@ import binascii
 from collections.abc import Mapping
 from typing import Iterator, Optional, Union
 
-import canopen.network
-from canopen import objectdictionary
-from canopen import variable
-from canopen.async_guard import ensure_not_async
-from canopen.utils import pretty_index
+from canopen_asyncio import canopen
+from canopen_asyncio import objectdictionary
+from canopen_asyncio import variable
+from canopen_asyncio.async_guard import ensure_not_async
+from canopen_asyncio.utils import pretty_index
 
 
 class CrcXmodem:

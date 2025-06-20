@@ -7,13 +7,13 @@ import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
 from typing import TYPE_CHECKING
 
-from canopen import objectdictionary
-from canopen.async_guard import ensure_not_async
-from canopen.objectdictionary import ObjectDictionary, datatypes
-from canopen.sdo import SdoClient
+from canopen_asyncio import objectdictionary
+from canopen_asyncio.async_guard import ensure_not_async
+from canopen_asyncio.objectdictionary import ObjectDictionary, datatypes
+from canopen_asyncio.sdo import SdoClient
 
 if TYPE_CHECKING:
-    import canopen.network
+    from canopen_asyncio import canopen
 
 
 logger = logging.getLogger(__name__)

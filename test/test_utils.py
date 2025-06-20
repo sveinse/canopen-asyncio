@@ -1,6 +1,6 @@
 import unittest
 
-from canopen.utils import pretty_index
+from canopen_asyncio.utils import pretty_index
 
 
 class TestUtils(unittest.IsolatedAsyncioTestCase):

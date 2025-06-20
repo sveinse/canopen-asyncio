@@ -9,14 +9,14 @@ from typing import Callable, Dict, Final, Iterator, List, Optional, Union
 import can
 from can import Listener
 
-from canopen.async_guard import set_async_sentinel, ensure_not_async
-from canopen.lss import LssMaster
-from canopen.nmt import NmtMaster
-from canopen.node import LocalNode, RemoteNode
-from canopen.objectdictionary import ObjectDictionary
-from canopen.objectdictionary.eds import import_from_node
-from canopen.sync import SyncProducer
-from canopen.timestamp import TimeProducer
+from canopen_asyncio.async_guard import set_async_sentinel, ensure_not_async
+from canopen_asyncio.lss import LssMaster
+from canopen_asyncio.nmt import NmtMaster
+from canopen_asyncio.node import LocalNode, RemoteNode
+from canopen_asyncio.objectdictionary import ObjectDictionary
+from canopen_asyncio.objectdictionary.eds import import_from_node
+from canopen_asyncio.sync import SyncProducer
+from canopen_asyncio.timestamp import TimeProducer
 
 
 logger = logging.getLogger(__name__)

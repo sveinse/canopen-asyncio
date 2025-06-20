@@ -1,7 +1,7 @@
 import unittest
 import asyncio
 
-import canopen
+import canopen_asyncio as canopen
 
 
 def count_subscribers(network: canopen.Network) -> int:

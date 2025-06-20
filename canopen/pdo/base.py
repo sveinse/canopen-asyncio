@@ -8,16 +8,16 @@ import threading
 from collections.abc import Mapping
 from typing import Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Union
 
-import canopen.network
-from canopen import objectdictionary
-from canopen import variable
-from canopen.async_guard import ensure_not_async
-from canopen.sdo import SdoAbortedError
+from canopen_asyncio import canopen
+from canopen_asyncio import objectdictionary
+from canopen_asyncio import variable
+from canopen_asyncio.async_guard import ensure_not_async
+from canopen_asyncio.sdo import SdoAbortedError
 
 if TYPE_CHECKING:
-    from canopen import LocalNode, RemoteNode
-    from canopen.pdo import RPDO, TPDO
-    from canopen.sdo import SdoRecord
+    from canopen_asyncio import LocalNode, RemoteNode
+    from canopen_asyncio.pdo import RPDO, TPDO
+    from canopen_asyncio.sdo import SdoRecord
 
 
 PDO_NOT_VALID = 1 << 31

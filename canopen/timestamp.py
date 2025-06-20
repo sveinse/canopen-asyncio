@@ -5,7 +5,7 @@ import time
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import canopen.network
+    from canopen_asyncio import canopen
 
 
 # 1 Jan 1984
