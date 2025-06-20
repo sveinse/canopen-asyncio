@@ -7,12 +7,12 @@ import time
 
 from can import CanError
 
-from canopen import objectdictionary
-from canopen.async_guard import ensure_not_async
-from canopen.sdo.base import SdoBase
-from canopen.sdo.constants import *
-from canopen.sdo.exceptions import *
-from canopen.utils import pretty_index
+from canopen_asyncio import objectdictionary
+from canopen_asyncio.async_guard import ensure_not_async
+from canopen_asyncio.sdo.base import SdoBase
+from canopen_asyncio.sdo.constants import *
+from canopen_asyncio.sdo.exceptions import *
+from canopen_asyncio.utils import pretty_index
 
 
 logger = logging.getLogger(__name__)

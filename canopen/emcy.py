@@ -6,8 +6,8 @@ import threading
 import time
 from typing import Callable, List, Optional
 
-from canopen.async_guard import ensure_not_async
-import canopen.network
+from canopen_asyncio.async_guard import ensure_not_async
+from canopen_asyncio import canopen
 
 
 # Error code, error register, vendor specific data

@@ -9,9 +9,10 @@ import struct
 from collections.abc import Mapping, MutableMapping
 from typing import Dict, Iterator, List, Optional, TextIO, Union
 
-from canopen.objectdictionary.datatypes import *
-from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
-from canopen.utils import pretty_index
+from canopen_asyncio import canopen
+from canopen_asyncio.objectdictionary.datatypes import *
+from canopen_asyncio.objectdictionary.datatypes import IntegerN, UnsignedN
+from canopen_asyncio.utils import pretty_index
 
 
 logger = logging.getLogger(__name__)

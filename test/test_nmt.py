@@ -5,9 +5,9 @@ import asyncio
 
 import can
 
-import canopen
-from canopen.async_guard import AllowBlocking
-from canopen.nmt import COMMAND_TO_STATE, NMT_COMMANDS, NMT_STATES, NmtError
+import canopen_asyncio as canopen
+from canopen_asyncio.async_guard import AllowBlocking
+from canopen_asyncio.nmt import COMMAND_TO_STATE, NMT_COMMANDS, NMT_STATES, NmtError
 
 from .util import SAMPLE_EDS
 

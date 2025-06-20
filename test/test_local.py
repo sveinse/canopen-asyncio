@@ -2,8 +2,8 @@ import time
 import unittest
 import asyncio
 
-import canopen
-from canopen.async_guard import AllowBlocking
+import canopen_asyncio as canopen
+from canopen_asyncio.async_guard import AllowBlocking
 
 from .util import SAMPLE_EDS
 

@@ -1,6 +1,6 @@
 import unittest
 
-from canopen import objectdictionary as od
+from canopen_asyncio import objectdictionary as od
 
 
 class TestDataConversions(unittest.TestCase):

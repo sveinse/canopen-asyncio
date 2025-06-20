@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import canopen.network
+    from canopen_asyncio import canopen
 
 
 class SyncProducer:

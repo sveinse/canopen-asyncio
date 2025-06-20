@@ -1,7 +1,7 @@
 import logging
 
-from canopen import node
-from canopen.pdo.base import PdoBase, PdoMap, PdoMaps, PdoVariable
+from canopen_asyncio import node
+from canopen_asyncio.pdo.base import PdoBase, PdoMap, PdoMaps, PdoVariable
 
 
 __all__ = [

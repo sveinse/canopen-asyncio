@@ -1,10 +1,10 @@
 import unittest
 import asyncio
 
-import canopen
-from canopen.async_guard import AllowBlocking
-import canopen.objectdictionary.datatypes as dt
-from canopen.objectdictionary import ODVariable
+import canopen_asyncio as canopen
+from canopen_asyncio.async_guard import AllowBlocking
+import canopen_asyncio.objectdictionary.datatypes as dt
+from canopen_asyncio.objectdictionary import ODVariable
 
 from .util import DATATYPES_EDS, SAMPLE_EDS
 

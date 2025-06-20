@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 from typing import TextIO, Union
 
-import canopen.network
-from canopen.emcy import EmcyConsumer
-from canopen.nmt import NmtMaster
-from canopen.node.base import BaseNode
-from canopen.objectdictionary import ODArray, ODRecord, ODVariable, ObjectDictionary
-from canopen.pdo import PDO, RPDO, TPDO
-from canopen.sdo import SdoAbortedError, SdoClient, SdoCommunicationError
+from canopen_asyncio import canopen
+from canopen_asyncio.emcy import EmcyConsumer
+from canopen_asyncio.nmt import NmtMaster
+from canopen_asyncio.node.base import BaseNode
+from canopen_asyncio.objectdictionary import ODArray, ODRecord, ODVariable, ObjectDictionary
+from canopen_asyncio.pdo import PDO, RPDO, TPDO
+from canopen_asyncio.sdo import SdoAbortedError, SdoClient, SdoCommunicationError
 
 
 logger = logging.getLogger(__name__)

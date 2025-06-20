@@ -4,7 +4,7 @@ import asyncio
 
 import can
 
-import canopen
+import canopen_asyncio as canopen
 
 
 PERIOD = 0.01

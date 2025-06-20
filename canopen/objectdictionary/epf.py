@@ -1,8 +1,8 @@
 import logging
 import xml.etree.ElementTree as etree
 
-from canopen import objectdictionary
-from canopen.objectdictionary import ObjectDictionary
+from canopen_asyncio import objectdictionary
+from canopen_asyncio.objectdictionary import ObjectDictionary
 
 
 logger = logging.getLogger(__name__)

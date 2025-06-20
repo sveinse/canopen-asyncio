@@ -6,8 +6,8 @@ from contextlib import contextmanager
 
 import can
 
-import canopen
-from canopen.emcy import EmcyError, EmcyConsumer
+import canopen_asyncio as canopen
+from canopen_asyncio.emcy import EmcyError, EmcyConsumer
 
 
 TIMEOUT = 0.1
