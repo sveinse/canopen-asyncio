@@ -1,7 +1,7 @@
 CANopen for Python, asyncio port
 ================================
 
-A Python implementation of the CANopen_ standard.
+A Python implementation of the `CANopen standard`_.
 The aim of the project is to support the most common parts of the CiA 301
 standard in a simple Pythonic interface. It is mainly targeted for testing and
 automation tasks rather than a standard compliant master implementation.
@@ -9,18 +9,19 @@ automation tasks rather than a standard compliant master implementation.
 The library supports Python 3.8 or newer.
 
 This library is the asyncio port of CANopen. It is a fork of the upstream
-python-canopen_ library, adding support for running in an asyncio environment.
+canopen_ library, adding support for running in an asyncio environment.
 
-.. note::
+NOTE
+-----
 
-    There is ongoing work to merge this asyncio port back into the upstream
-    canopen library. This is not yet complete, and this package was created to
-    be able to use the asyncio port in the meantime. When the merge is
-    complete, this package will be deprecated and the upstream library will
-    support asyncio natively.
+There is ongoing work to merge this asyncio port back into the upstream
+canopen library. This is not yet complete, and this package was created to
+be able to use the asyncio port in the meantime. When the merge is
+complete, this package will be deprecated and the upstream library will
+support asyncio natively.
 
-    See canopen-asyncio-issue_ and canopen-asyncio-pr_ for more information
-    about the merge.
+See `canopen asyncio issue`_ and `canopen asyncio PR`_ for more information
+about the merge.
 
 
 Features
@@ -78,9 +79,8 @@ You can also use :code:`unittest` standard library module::
 Documentation
 -------------
 
-.. note::
-    The documentation is not yet updated for the asyncio port. These docs are
-    for the upstream canopen library.
+**NOTE:** The documentation is not yet updated for the asyncio port. These docs
+are for the upstream canopen library.
 
 Documentation can be found on Read the Docs:
 
@@ -264,12 +264,12 @@ logging_ level:
 
 
 .. _PyPI: https://pypi.org/project/canopen-asyncio/
-.. _python-canopen: https://pypi.org/project/canopen/
-.. _CANopen: https://www.can-cia.org/canopen/
+.. _canopen: https://pypi.org/project/canopen/
+.. _CANopen standard: https://www.can-cia.org/canopen/
 .. _python-can: https://python-can.readthedocs.org/en/stable/
 .. _Sphinx: http://www.sphinx-doc.org/
 .. _develop mode: https://packaging.python.org/distributing/#working-in-development-mode
 .. _logging: https://docs.python.org/3/library/logging.html
 .. _pytest: https://docs.pytest.org/
-.. _canopen-asyncio-issue: https://github.com/canopen-python/canopen/issues/272
-.. _canopen-asyncio-pr: https://github.com/canopen-python/canopen/pull/359
+.. _canopen asyncio issue: https://github.com/canopen-python/canopen/issues/272
+.. _canopen asyncio pr: https://github.com/canopen-python/canopen/pull/359
