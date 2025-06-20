@@ -50,7 +50,7 @@ Incomplete support for creating slave nodes also exists.
 Installation
 ------------
 
-Install from PyPI_ using :program:`pip`::
+Install from PyPI_ using :code:`pip`::
 
     $ pip install canopen-asyncio
 
