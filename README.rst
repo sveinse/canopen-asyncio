@@ -70,7 +70,7 @@ Unit tests can be run using the pytest_ framework::
     $ pip install -r requirements-dev.txt
     $ pytest -v
 
-You can also use :mod:`unittest` standard library module::
+You can also use :code:`unittest` standard library module::
 
     $ python3 -m unittest discover test -v
 
