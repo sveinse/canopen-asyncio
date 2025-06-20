@@ -249,7 +249,6 @@ class TestObjectDictionary(unittest.TestCase):
         self.assertEqual(test_od["Test Array.Test Variable"], member1)
         self.assertEqual(test_od["Test Array.Test Variable 2"], member2)
 
-    # FIXME: See upstream #588
     def test_get_item_index(self):
         test_od = od.ObjectDictionary()
         array = od.ODArray("Test Array", 0x1000)
