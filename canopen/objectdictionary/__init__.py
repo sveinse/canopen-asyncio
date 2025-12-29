@@ -9,7 +9,6 @@ import struct
 from collections.abc import Mapping, MutableMapping
 from typing import Dict, Iterator, List, Optional, TextIO, Union
 
-from canopen_asyncio import canopen
 from canopen_asyncio.objectdictionary.datatypes import *
 from canopen_asyncio.objectdictionary.datatypes import IntegerN, UnsignedN
 from canopen_asyncio.utils import pretty_index
@@ -61,12 +60,12 @@ def export_od(
             dest = open(dest, 'w')
             opened_here = True
 
-        if doc_type == "eds":
-            from canopen.objectdictionary import eds
-            return eds.export_eds(od, dest)
-        elif doc_type == "dcf":
-            from canopen.objectdictionary import eds
-            return eds.export_dcf(od, dest)
+        if doc_type == "eds":            
+            from .eds import export_eds
+            return export_eds(od, dest)
+        elif doc_type == "dcf":            
+            from .eds import export_dcf
+            return export_dcf(od, dest)
     finally:
         # If dest is opened in this fn, it should be closed
         if opened_here:
@@ -101,12 +100,12 @@ def import_od(
         # Path to file
         filename = source
     suffix = filename[filename.rfind("."):].lower()
-    if suffix in (".eds", ".dcf"):
-        from canopen.objectdictionary import eds
-        return eds.import_eds(source, node_id)
+    if suffix in (".eds", ".dcf"):        
+        from .eds import import_eds
+        return import_eds(source, node_id)
     elif suffix == ".epf":
-        from canopen.objectdictionary import epf
-        return epf.import_epf(source)
+        from .epf import import_epf        
+        return import_epf(source)
     else:
         doc_type = suffix[1:]
         allowed = ", ".join(["eds", "dcf", "epf"])
