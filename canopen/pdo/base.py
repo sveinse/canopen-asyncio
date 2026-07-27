@@ -62,7 +62,7 @@ class PdoBase(Mapping):
     def __len__(self):
         return len(self.map)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def read(self, from_od=False):
         """Read PDO configuration from node using SDO."""
         for pdo_map in self.map.values():
@@ -73,7 +73,7 @@ class PdoBase(Mapping):
         for pdo_map in self.map.values():
             await pdo_map.aread(from_od=from_od)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def save(self):
         """Save PDO configuration to node using SDO."""
         for pdo_map in self.map.values():
@@ -342,12 +342,10 @@ class PdoMap:
         # Unknown transmission type, assume non-periodic
         return False
 
-    # @callback  # NOTE: called from another thread
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def on_message(self, can_id, data, timestamp):
         is_transmitting = self._task is not None
         if can_id == self.cob_id and not is_transmitting:
-            # NOTE: Blocking lock
             with self.receive_condition:
                 self.is_received = True
                 self.data = data
@@ -424,7 +422,7 @@ class PdoMap:
 
         self.subscribe()
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def read(self, from_od=False) -> None:
         """Read PDO configuration for this map.
 
@@ -444,7 +442,6 @@ class PdoMap:
                     value = param.od.default
             else:
                 # Get value from SDO
-                # NOTE: Blocking - protected in SdoClient
                 value = param.raw
             try:
                 # Deliver value into read_generator and wait for next object
@@ -559,15 +556,13 @@ class PdoMap:
             yield self.com_record[1], cob_id
             self.subscribe()
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def save(self) -> None:
         """Read PDO configuration for this map using SDO."""
         for sdo, value in self.save_generator():
             if value == '@@fillmap':
-                # NOTE: Blocking - protected in SdoClient
                 self._fill_map(sdo.raw)
             else:
-                # NOTE: Blocking call
                 sdo.raw = value
 
     async def asave(self) -> None:
@@ -685,17 +680,15 @@ class PdoMap:
         if self.enabled and self.rtr_allowed and self.cob_id:
             self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def wait_for_reception(self, timeout: float = 10) -> float:
         """Wait for the next transmit PDO.
 
         :param float timeout: Max time to wait in seconds.
         :return: Timestamp of message received or None if timeout.
         """
-        # NOTE: Blocking lock
         with self.receive_condition:
             self.is_received = False
-            # NOTE: Blocking call
             self.receive_condition.wait(timeout)
         return self.timestamp if self.is_received else None
 

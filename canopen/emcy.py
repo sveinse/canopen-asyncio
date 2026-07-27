@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import asyncio
 import logging
 import struct
@@ -27,13 +28,11 @@ class EmcyConsumer:
         self.emcy_received = threading.Condition()
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
 
-    # @callback  # NOTE: called from another thread
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def on_emcy(self, can_id, data, timestamp):
         code, register, data = EMCY_STRUCT.unpack(data)
         entry = EmcyError(code, register, data, timestamp)
 
-        # NOTE: Blocking lock
         with self.emcy_received:
             if code & 0xFF00 == 0:
                 # Error reset
@@ -60,7 +59,7 @@ class EmcyConsumer:
         self.log = []
         self.active = []
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
     ) -> Optional[EmcyError]:
@@ -73,10 +72,8 @@ class EmcyConsumer:
         """
         end_time = time.time() + timeout
         while True:
-            # NOTE: Blocking lock
             with self.emcy_received:
                 prev_log_size = len(self.log)
-                # NOTE: Blocking call
                 self.emcy_received.wait(timeout)
                 if len(self.log) == prev_log_size:
                     # Resumed due to timeout

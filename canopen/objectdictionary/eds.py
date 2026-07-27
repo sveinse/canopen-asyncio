@@ -35,7 +35,6 @@ def import_eds(source, node_id):
         else:
             fp = open(source)
             opened_here = True
-        # NOTE: Blocking call if fp is a file
         eds.read_file(fp)
     finally:
         # Only close object if opened in this fn
@@ -187,7 +186,7 @@ def import_eds(source, node_id):
     return od
 
 
-@ensure_not_async  # NOTE: Safeguard for accidental async use
+@ensure_not_async
 def import_from_node(node_id: int, network: canopen.network.Network):
     """ Download the configuration from the remote node
     :param int node_id: Identifier of the node
@@ -200,7 +199,6 @@ def import_from_node(node_id: int, network: canopen.network.Network):
     network.subscribe(0x580 + node_id, sdo_client.on_response)
     # Create file like object for Store EDS variable
     try:
-        # NOTE: This results in a blocking call
         with sdo_client.open(0x1021, 0, "rt") as eds_fp:
             od = import_eds(eds_fp, node_id)
     except Exception as e:

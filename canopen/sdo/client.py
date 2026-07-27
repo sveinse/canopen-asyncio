@@ -7,7 +7,6 @@ import time
 
 from can import CanError
 
-from canopen import objectdictionary
 from canopen.async_guard import ensure_not_async
 from canopen.sdo.base import SdoBase
 from canopen.sdo.constants import *
@@ -46,15 +45,13 @@ class SdoClient(SdoBase):
         self.responses = queue.Queue()
         self.lock = asyncio.Lock()  # For ensuring only one pending SDO request in async
 
-    # @callback  # NOTE: called from another thread
     def on_response(self, can_id, data, timestamp):
         self.responses.put(bytes(data))
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def send_request(self, request):
         retries_left = self.MAX_RETRIES
         if self.PAUSE_BEFORE_SEND:
-            # NOTE: Blocking
             time.sleep(self.PAUSE_BEFORE_SEND)
         while True:
             try:
@@ -66,7 +63,6 @@ class SdoClient(SdoBase):
                     raise
                 logger.info(str(e))
                 if self.RETRY_DELAY:
-                    # NOTE: Blocking
                     time.sleep(self.RETRY_DELAY)
             else:
                 break
@@ -80,7 +76,6 @@ class SdoClient(SdoBase):
             After timeout with no response received.
         """
         try:
-            # NOTE: Blocking call
             response = self.responses.get(
                 block=True, timeout=self.RESPONSE_TIMEOUT)
         except queue.Empty:
@@ -94,8 +89,7 @@ class SdoClient(SdoBase):
     def request_response(self, sdo_request):
         retries_left = self.MAX_RETRIES
         if not self.responses.empty():
-            # FIXME: Recreating the queue
-            logger.warning("There were unexpected messages in the queue")
+            # logger.warning("There were unexpected messages in the queue")
             self.responses = queue.Queue()
         while True:
             self.send_request(sdo_request)
@@ -122,7 +116,7 @@ class SdoClient(SdoBase):
         """Abort current transfer. Async version."""
         return await asyncio.to_thread(self.abort, abort_code)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def upload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary.
 
@@ -166,6 +160,7 @@ class SdoClient(SdoBase):
            Async version.
         """
         async with self.lock:  # Ensure only one active SDO request per channel
+
             # Deferring to thread because there are sleeps and queue waits in the call chain
             # The call stack is typically:
             #    upload -> open -> ReadableStream -> request_reponse -> send_request -> network.send_message
@@ -180,7 +175,7 @@ class SdoClient(SdoBase):
             data, response_size = await asyncio.to_thread(_upload)
             return self.truncate_data(index, subindex, data, response_size)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def download(
         self,
         index: int,
@@ -228,7 +223,7 @@ class SdoClient(SdoBase):
 
             return await asyncio.to_thread(_download)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def open(self, index, subindex=0, mode="rb", encoding="ascii",
              buffering=1024, size=None, block_transfer=False, force_segment=False, request_crc_support=True):
         """Open the data stream as a file like object.

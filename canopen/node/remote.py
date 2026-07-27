@@ -134,10 +134,8 @@ class RemoteNode(BaseNode):
             if subindex is not None:
                 logger.info('SDO [0x%04X][0x%02X]: %s: %#06x',
                             index, subindex, name, value)
-                # NOTE: Blocking - protected in SdoClient
                 self.sdo[index][subindex].raw = value
             else:
-                # NOTE: Blocking - protected in SdoClient
                 self.sdo[index].raw = value
                 logger.info('SDO [0x%04X]: %s: %#06x',
                             index, name, value)

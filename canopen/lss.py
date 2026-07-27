@@ -89,8 +89,6 @@ class LssMaster:
         self._data = None
         self.responses: queue.Queue[bytes] = queue.Queue()
 
-    # FIXME: Async implementation of the public methods in this class
-
     def send_switch_state_global(self, mode):
         """switch mode to CONFIGURATION_STATE or WAITING_STATE
         in the all slaves on CAN bus.
@@ -245,7 +243,7 @@ class LssMaster:
         message[0] = CS_IDENTIFY_NON_CONFIGURED_REMOTE_SLAVE
         self.__send_command(message)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def fast_scan(self):
         """This command sends a series of fastscan message
         to find unconfigured slave with lowest number of LSS idenities
@@ -262,7 +260,6 @@ class LssMaster:
         lss_next = 0
 
         if self.__send_fast_scan_message(lss_id[0], lss_bit_check, lss_sub, lss_next):
-            # NOTE: Blocking call
             time.sleep(0.01)
             while lss_sub < 4:
                 lss_bit_check = 32
@@ -272,14 +269,12 @@ class LssMaster:
                     if not self.__send_fast_scan_message(lss_id[lss_sub], lss_bit_check, lss_sub, lss_next):
                         lss_id[lss_sub] |= 1<<lss_bit_check
 
-                    # NOTE: Blocking call
                     time.sleep(0.01)
 
                 lss_next = (lss_sub + 1) & 3
                 if not self.__send_fast_scan_message(lss_id[lss_sub], lss_bit_check, lss_sub, lss_next):
                     return False, None
 
-                # NOTE: Blocking call
                 time.sleep(0.01)
 
                 # Now the next 32 bits will be scanned
@@ -308,7 +303,7 @@ class LssMaster:
 
         return False
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def __send_lss_address(self, req_cs, number):
         message = bytearray(8)
 
@@ -317,7 +312,6 @@ class LssMaster:
         response = self.__send_command(message)
         # some device needs these delays between messages
         # because it can't handle messages arriving with no delay
-        # NOTE: Blocking call
         time.sleep(0.2)
 
         return response
@@ -373,7 +367,7 @@ class LssMaster:
             error_msg = f"LSS Error: {error_code}"
             raise LssError(error_msg)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def __send_command(self, message):
         """Send a LSS operation code to the network
 
@@ -390,8 +384,7 @@ class LssMaster:
 
         response = None
         if not self.responses.empty():
-            # FIXME: Recreating the queue
-            logger.warning("There were unexpected messages in the queue")
+            logger.info("There were unexpected messages in the queue")
             self.responses = queue.Queue()
 
         self.network.send_message(self.LSS_TX_COBID, message)
@@ -402,7 +395,6 @@ class LssMaster:
         # Wait for the slave to respond
         # TODO check if the response is LSS response message
         try:
-            # NOTE: Blocking call
             response = self.responses.get(
                 block=True, timeout=self.RESPONSE_TIMEOUT)
         except queue.Empty:
@@ -410,10 +402,8 @@ class LssMaster:
 
         return response
 
-    # @callback  # NOTE: called from another thread
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def on_message_received(self, can_id, data, timestamp):
-        # NOTE: Blocking call
         self.responses.put(bytes(data))
 
 

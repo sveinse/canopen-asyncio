@@ -29,8 +29,8 @@ class Network(MutableMapping):
     NOTIFIER_CYCLE: float = 1.0  #: Maximum waiting time for one notifier iteration.
     NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
 
-    # NOTE: Function arguments changed to provide notifier, see #556
-    def __init__(self, bus: Optional[can.BusABC] = None, notifier: Optional[can.Notifier] = None,
+    def __init__(self, bus: Optional[can.BusABC] = None,
+                 notifier: Optional[can.Notifier] = None,
                  loop: Optional[asyncio.AbstractEventLoop] = None):
         """
         :param can.BusABC bus:
@@ -58,9 +58,9 @@ class Network(MutableMapping):
         self.lss = LssMaster()
         self.lss.network = self
 
-        # Register this function as the means to check if canopen is run in
-        # async mode. This enables the @ensure_not_async() decorator to
-        # work. See async_guard.py
+        # Enable the async guard for this thread if running an event loop.
+        # This enables the @ensure_not_async() guard to protect against
+        # accidental calling of blocking functions.
         set_async_sentinel(self.is_async())
 
         self.subscribe(self.lss.LSS_RX_COBID, self.lss.on_message_received)
@@ -168,7 +168,7 @@ class Network(MutableMapping):
     async def __aexit__(self, type, value, traceback):
         self.disconnect()
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def add_node(
         self,
         node: Union[int, RemoteNode, LocalNode],
@@ -208,7 +208,7 @@ class Network(MutableMapping):
 
         See add_node() for description
         """
-        # NOTE: The async variant exists because import_from_node might block
+        # The async variant exists because import_from_node might block
         return await asyncio.to_thread(self.add_node, node,
                                        object_dictionary, upload_eds)
 
@@ -257,8 +257,6 @@ class Network(MutableMapping):
                           arbitration_id=can_id,
                           data=data,
                           is_remote_frame=remote)
-        # NOTE: Blocking lock. This is probably ok for async, because async
-        #       only use one thread.
         with self.send_lock:
             self.bus.send(msg)
         self.check()
@@ -282,7 +280,6 @@ class Network(MutableMapping):
         """
         return PeriodicMessageTask(can_id, data, period, self.bus, remote)
 
-    # @callback  # NOTE: called from another thread
     def notify(self, can_id: int, data: bytearray, timestamp: float) -> None:
         """Feed incoming message to this library.
 
@@ -426,7 +423,6 @@ class PeriodicMessageTask:
         """Stop transmission"""
         self._task.stop()
 
-    # @callback  # NOTE: Indirectly called from another thread via other callbacks
     def update(self, data: bytes) -> None:
         """Update data of message
 
@@ -454,7 +450,6 @@ class MessageListener(can.Listener):
     def __init__(self, network: Network):
         self.network = network
 
-    # @callback  # NOTE: called from another thread
     def on_message_received(self, msg):
         if msg.is_error_frame or msg.is_remote_frame:
             return
@@ -491,7 +486,6 @@ class NodeScanner:
         #: A :class:`list` of nodes discovered
         self.nodes: list[int] = []
 
-    # @callback  # NOTE: called from another thread
     def on_message_received(self, can_id: int):
         service = can_id & 0x780
         node_id = can_id & 0x7F

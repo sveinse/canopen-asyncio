@@ -4,9 +4,15 @@ import logging
 import threading
 import traceback
 
-# NOTE: Global, but needed to be able to use ensure_not_async() in
-#       decorator context.
+
 _ASYNC_SENTINELS: dict[int, bool] = {}
+"""Per-thread boolean indicating allowance of running blocking functions.
+
+Any function that is guarded with the :code:`@ensure_not_async` decorator will
+fail with a :code:`RuntimeError` if called if True for this thread. The
+application sets this value to True using :code:`set_async_sentinel(True)`
+when it is running async code.
+"""
 
 logger = logging.getLogger(__name__)
 
