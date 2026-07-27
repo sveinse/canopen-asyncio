@@ -31,11 +31,11 @@ class TestBaseNode(unittest.TestCase):
 class TestLocalNode(unittest.IsolatedAsyncioTestCase):
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         loop = None
-        if self.use_async:
+        if self.async_test:
             loop = asyncio.get_event_loop()
 
         self.network = canopen.Network(loop=loop)
@@ -85,23 +85,23 @@ class TestLocalNode(unittest.IsolatedAsyncioTestCase):
 class TestLocalNodeSync(TestLocalNode):
     """ Run the tests in non-asynchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestLocalNodeAsync(TestLocalNode):
     """ Run the tests in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 class TestRemoteNode(unittest.IsolatedAsyncioTestCase):
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         loop = None
-        if self.use_async:
+        if self.async_test:
             loop = asyncio.get_event_loop()
 
         self.network = canopen.Network(loop=loop)
@@ -151,10 +151,10 @@ class TestRemoteNode(unittest.IsolatedAsyncioTestCase):
 class TestRemoteNodeSync(TestRemoteNode):
     """ Run the tests in non-asynchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestRemoteNodeAsync(TestRemoteNode):
     """ Run the tests in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True

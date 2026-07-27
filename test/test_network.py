@@ -13,11 +13,11 @@ from .util import SAMPLE_EDS
 class TestNetwork(unittest.IsolatedAsyncioTestCase):
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         self.loop = None
-        if self.use_async:
+        if self.async_test:
             self.loop = asyncio.get_event_loop()
 
         self.network = canopen.Network(loop=self.loop)
@@ -30,7 +30,7 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
     async def test_network_add_node(self):
         # Add using str.
         with self.assertLogs():
-            if self.use_async:
+            if self.async_test:
                 node = await self.network.aadd_node(2, SAMPLE_EDS)
             else:
                 node = self.network.add_node(2, SAMPLE_EDS)
@@ -39,7 +39,7 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(node, canopen.RemoteNode)
 
         # Add using OD.
-        if self.use_async:
+        if self.async_test:
             node = await self.network.aadd_node(3, self.network[2].object_dictionary)
         else:
             node = self.network.add_node(3, self.network[2].object_dictionary)
@@ -50,7 +50,7 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
         # Add using RemoteNode.
         with self.assertLogs():
             node = canopen.RemoteNode(4, SAMPLE_EDS)
-        if self.use_async:
+        if self.async_test:
             await self.network.aadd_node(node)
         else:
             self.network.add_node(node)
@@ -61,7 +61,7 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
         # Add using LocalNode.
         with self.assertLogs():
             node = canopen.LocalNode(5, SAMPLE_EDS)
-        if self.use_async:
+        if self.async_test:
             await self.network.aadd_node(node)
         else:
             self.network.add_node(node)
@@ -75,7 +75,7 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
     async def test_network_add_node_upload_eds(self):
         # Will err because we're not connected to a real network.
         with self.assertLogs(level=logging.ERROR):
-            if self.use_async:
+            if self.async_test:
                 await self.network.aadd_node(2, SAMPLE_EDS, upload_eds=True)
             else:
                 self.network.add_node(2, SAMPLE_EDS, upload_eds=True)
@@ -116,14 +116,14 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
 
     async def test_network_notify(self):
         with self.assertLogs():
-            if self.use_async:
+            if self.async_test:
                 await self.network.aadd_node(2, SAMPLE_EDS)
             else:
                 self.network.add_node(2, SAMPLE_EDS)
         node = self.network[2]
         async def notify(*args):
             """Simulate a notification from the network."""
-            if self.use_async:
+            if self.async_test:
                 # If we're using async, we must run the notify in a thread
                 # to avoid getting blocking call errors.
                 await asyncio.to_thread(self.network.notify, *args)
@@ -248,7 +248,7 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
 
     async def test_network_item_access(self):
         with self.assertLogs():
-            if self.use_async:
+            if self.async_test:
                 await self.network.aadd_node(2, SAMPLE_EDS)
                 await self.network.aadd_node(3, SAMPLE_EDS)
             else:
@@ -417,24 +417,24 @@ class TestNetwork(unittest.IsolatedAsyncioTestCase):
 class TestNetworkSync(TestNetwork):
     """ Run tests in a synchronous context. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestNetworkAsync(TestNetwork):
     """ Run tests in an asynchronous context. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 class TestScanner(unittest.IsolatedAsyncioTestCase):
     TIMEOUT = 0.1
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         self.loop = None
-        if self.use_async:
+        if self.async_test:
             self.loop = asyncio.get_event_loop()
         self.scanner = canopen.network.NodeScanner()
 
@@ -512,13 +512,13 @@ class TestScanner(unittest.IsolatedAsyncioTestCase):
 class TestScannerSync(TestScanner):
     """ Run the tests in a synchronous context. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestScannerAsync(TestScanner):
     """ Run the tests in an asynchronous context. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 if __name__ == "__main__":

@@ -14,11 +14,11 @@ TIMEOUT = PERIOD * 10
 class TestSync(unittest.IsolatedAsyncioTestCase):
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         loop = None
-        if self.use_async:
+        if self.async_test:
             loop = asyncio.get_event_loop()
 
         self.net = canopen.Network(loop=loop)
@@ -97,13 +97,13 @@ class TestSync(unittest.IsolatedAsyncioTestCase):
 class TestSyncSync(TestSync):
     """ Test the functions in synchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestSyncAsync(TestSync):
     """ Test the functions in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 if __name__ == "__main__":

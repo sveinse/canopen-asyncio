@@ -420,6 +420,7 @@ class TestEDS(unittest.TestCase):
             buf.name = "mock.eds"
             self.verify_od(buf, "eds")
 
+
     def verify_od(self, source, doctype):
         exported_od = canopen.import_od(source)
 

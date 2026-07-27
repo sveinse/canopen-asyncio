@@ -8,7 +8,7 @@ from .util import SAMPLE_EDS, tmp_file
 class TestPDO(unittest.IsolatedAsyncioTestCase):
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         node = canopen.LocalNode(1, SAMPLE_EDS)
@@ -28,7 +28,7 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
 
     async def test_pdo_map_bit_mapping(self):
         await self.set_values()
-        if not self.use_async:
+        if not self.async_test:
             self.assertEqual(self.pdo.data, b'\xfd\xff\xef\x04\x03\x02\x01\x02')
         else:
             self.assertEqual(self.pdo.data, b'\x0c\x00\xce\xbc\x9a\x78\x56\x01')
@@ -41,7 +41,7 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
         """
         node = self.node
         pdo = node.pdo.tx[1]
-        if not self.use_async:
+        if not self.async_test:
             # Write some values
             pdo['INTEGER16 value'].raw = -3
             pdo['UNSIGNED8 value'].raw = 0xf
@@ -118,7 +118,7 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
     async def test_pdo_map_getitem(self):
         await self.set_values()
         pdo = self.pdo
-        if not self.use_async:
+        if not self.async_test:
             self.assertEqual(pdo['INTEGER16 value'].raw, -3)
             self.assertEqual(pdo['UNSIGNED8 value'].raw, 0xf)
             self.assertEqual(pdo['INTEGER8 value'].raw, -2)
@@ -136,7 +136,7 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
     async def test_pdo_getitem(self):
         await self.set_values()
         node = self.node
-        if not self.use_async:
+        if not self.async_test:
             self.assertEqual(node.tpdo[1]['INTEGER16 value'].raw, -3)
             self.assertEqual(node.tpdo[1]['UNSIGNED8 value'].raw, 0xf)
             self.assertEqual(node.tpdo[1]['INTEGER8 value'].raw, -2)
@@ -177,7 +177,7 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
 
     async def test_pdo_save(self):
         await self.set_values()
-        if not self.use_async:
+        if not self.async_test:
             self.node.tpdo.save()
             self.node.rpdo.save()
         else:
@@ -187,7 +187,7 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
     async def test_pdo_save_skip_readonly(self):
         """Expect no exception when a record entry is not writable."""
         await self.set_values()
-        if not self.use_async:
+        if not self.async_test:
             # Saving only happens with a defined COB ID and for specified parameters
             self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
             self.node.tpdo[1].trans_type = 1
@@ -230,13 +230,13 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
 class TestPDOSync(TestPDO):
     """ Test the functions in synchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestPDOAsync(TestPDO):
     """ Test the functions in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 if __name__ == "__main__":

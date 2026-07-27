@@ -12,11 +12,11 @@ import canopen.timestamp
 class TestTime(unittest.IsolatedAsyncioTestCase):
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         self.loop = None
-        if self.use_async:
+        if self.async_test:
             self.loop = asyncio.get_event_loop()
 
     async def test_epoch(self):
@@ -56,13 +56,13 @@ class TestTime(unittest.IsolatedAsyncioTestCase):
 class TestTimeSync(TestTime):
     """ Test time functions in synchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestTimeAsync(TestTime):
     """ Test time functions in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 if __name__ == "__main__":

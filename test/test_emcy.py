@@ -26,11 +26,11 @@ def mock_rx_thread(consumer: canopen.emcy.EmcyConsumer, func):
 class TestEmcy(unittest.IsolatedAsyncioTestCase):
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         loop = None
-        if self.use_async:
+        if self.async_test:
             loop = asyncio.get_event_loop()
         self.loop = loop
 
@@ -52,7 +52,7 @@ class TestEmcy(unittest.IsolatedAsyncioTestCase):
 
     async def dispatch_emcy(self, can_id, data, ts):
         # Dispatch an EMCY datagram.
-        if self.use_async:
+        if self.async_test:
             await asyncio.to_thread(
                 self.emcy.on_emcy, can_id, data, ts
             )
@@ -108,7 +108,7 @@ class TestEmcy(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(emcy.active), 0)
 
     async def test_emcy_consumer_wait(self):
-        if self.use_async:
+        if self.async_test:
             self.skipTest("Not implemented for async")
 
         emcy = canopen.emcy.EmcyConsumer()
@@ -124,7 +124,7 @@ class TestEmcy(unittest.IsolatedAsyncioTestCase):
             )
 
         # Check unfiltered wait, on timeout.
-        if self.use_async:
+        if self.async_test:
             self.assertIsNone(await emcy.async_wait(timeout=TIMEOUT))
         else:
             self.assertIsNone(emcy.wait(timeout=TIMEOUT))
@@ -217,13 +217,13 @@ class TestEmcy(unittest.IsolatedAsyncioTestCase):
 class TestEmcySync(TestEmcy):
     """ Run the tests in non-asynchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestEmcyAsync(TestEmcy):
     """ Run the tests in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 class TestEmcyError(unittest.TestCase):
@@ -287,11 +287,11 @@ class TestEmcyError(unittest.TestCase):
 class TestEmcyProducer(unittest.IsolatedAsyncioTestCase):
 
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
+    async_test: bool
 
     def setUp(self):
         loop = None
-        if self.use_async:
+        if self.async_test:
             loop = asyncio.get_event_loop()
 
         self.txbus = can.Bus(interface="virtual", loop=loop)
@@ -414,13 +414,13 @@ class TestEmcyIntegration(unittest.TestCase):
 class TestEmcyProducerSync(TestEmcyProducer):
     """ Run the tests in non-asynchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestEmcyProducerAsync(TestEmcyProducer):
     """ Run the tests in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 if __name__ == "__main__":
