@@ -3,11 +3,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from collections.abc import MutableMapping
-from typing import Callable, Dict, Final, Iterator, List, Optional, Union
+from collections.abc import Iterator, MutableMapping
+from typing import Callable, Final, Optional, Union
 
 import can
-from can import Listener
 
 from canopen.async_guard import set_async_sentinel, ensure_not_async
 from canopen.lss import LssMaster
@@ -46,10 +45,10 @@ class Network(MutableMapping):
         self.scanner = NodeScanner(self)
         #: List of :class:`can.Listener` objects.
         #: Includes at least MessageListener.
-        self.listeners = [MessageListener(self)]
+        self.listeners: list[can.Listener] = [MessageListener(self)]
         self.notifier: Optional[can.Notifier] = notifier
-        self.nodes: Dict[int, Union[RemoteNode, LocalNode]] = {}
-        self.subscribers: Dict[int, List[Callback]] = {}
+        self.nodes: dict[int, Union[RemoteNode, LocalNode]] = {}
+        self.subscribers: dict[int, list[Callback]] = {}
         self.send_lock = threading.Lock()
         self.sync = SyncProducer(self)
         self.time = TimeProducer(self)
@@ -145,7 +144,11 @@ class Network(MutableMapping):
         if self.bus is not None:
             self.bus.shutdown()
         self.bus = None
-        self.check()
+        try:
+            self.check()
+        finally:
+            # Release notifier after check
+            self.notifier = None
 
         # Remove the async sentinel
         set_async_sentinel(False)
@@ -171,7 +174,7 @@ class Network(MutableMapping):
         node: Union[int, RemoteNode, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, None] = None,
         upload_eds: bool = False,
-    ) -> RemoteNode:
+    ) -> Union[RemoteNode, LocalNode]:
         """Add a remote node to the network.
 
         :param node:
@@ -211,7 +214,7 @@ class Network(MutableMapping):
 
     def create_node(
         self,
-        node: int,
+        node: Union[int, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, None] = None,
     ) -> LocalNode:
         """Create a local node in the network.
@@ -441,7 +444,7 @@ class PeriodicMessageTask:
             self._start()
 
 
-class MessageListener(Listener):
+class MessageListener(can.Listener):
     """Listens for messages on CAN bus and feeds them to a Network instance.
 
     :param network:
@@ -486,7 +489,7 @@ class NodeScanner:
             network = _UNINITIALIZED_NETWORK
         self.network: Network = network
         #: A :class:`list` of nodes discovered
-        self.nodes: List[int] = []
+        self.nodes: list[int] = []
 
     # @callback  # NOTE: called from another thread
     def on_message_received(self, can_id: int):

@@ -126,6 +126,10 @@ class SdoClient(SdoBase):
     def upload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary.
 
+        No validation against the Object Dictionary is performed, even if an object description
+        would be available.  The length of the returned data depends only on the transferred
+        amount, possibly truncated to the size indicated by the server.
+
         :param index:
             Index of object to read.
         :param subindex:

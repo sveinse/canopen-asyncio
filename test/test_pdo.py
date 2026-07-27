@@ -26,6 +26,13 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
         self.pdo = pdo
         self.node = node
 
+    async def test_pdo_map_bit_mapping(self):
+        await self.set_values()
+        if not self.use_async:
+            self.assertEqual(self.pdo.data, b'\xfd\xff\xef\x04\x03\x02\x01\x02')
+        else:
+            self.assertEqual(self.pdo.data, b'\x0c\x00\xce\xbc\x9a\x78\x56\x01')
+
     async def set_values(self):
         """Initialize the PDO with some valuues.
 
@@ -51,12 +58,62 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
             await pdo['BOOLEAN value'].aset_raw(True)
             await pdo['BOOLEAN value 2'].aset_raw(False)
 
-    async def test_pdo_map_bit_mapping(self):
-        await self.set_values()
-        if not self.use_async:
-            self.assertEqual(self.pdo.data, b'\xfd\xff\xef\x04\x03\x02\x01\x02')
-        else:
-            self.assertEqual(self.pdo.data, b'\x0c\x00\xce\xbc\x9a\x78\x56\x01')
+        # Test different types of access
+        by_mapping_record = node.pdo[0x1A00]
+        self.assertIsInstance(by_mapping_record, canopen.pdo.PdoMap)
+        self.assertEqual(by_mapping_record['INTEGER16 value'].raw, -3)
+        self.assertIs(node.tpdo[0x1A00], by_mapping_record)
+        self.assertIs(node.tpdo[0x1800], by_mapping_record)
+        self.assertIs(node.pdo[0x1800], by_mapping_record)
+        by_object_name = node.pdo['INTEGER16 value']
+        self.assertIsInstance(by_object_name, canopen.pdo.PdoVariable)
+        self.assertIs(by_object_name.od, node.object_dictionary['INTEGER16 value'])
+        self.assertEqual(by_object_name.raw, -3)
+        by_pdo_index = node.pdo.tx[1]
+        self.assertIs(by_pdo_index, by_mapping_record)
+        by_object_index = node.pdo[0x2001]
+        self.assertIsInstance(by_object_index, canopen.pdo.PdoVariable)
+        self.assertIs(by_object_index, by_object_name)
+        by_object_index_tpdo = node.tpdo[0x2001]
+        self.assertIs(by_object_index_tpdo, by_object_name)
+        by_object_index = node.pdo[0x2002]
+        self.assertEqual(by_object_index.raw, 0xf)
+        self.assertIs(node.pdo['0x2002'], by_object_index)
+        self.assertIs(node.tpdo[0x2002], by_object_index)
+        self.assertIs(node.pdo[0x1A00][0x2002], by_object_index)
+
+        self.assertIs(node.pdo[0x1400], node.pdo[0x1600])
+
+        self.assertRaises(KeyError, lambda: node.pdo[0])
+        self.assertRaises(KeyError, lambda: node.tpdo[0])
+        self.assertRaises(KeyError, lambda: node.pdo['DOES NOT EXIST'])
+        self.assertRaises(KeyError, lambda: node.pdo[0x1BFF])
+        self.assertRaises(KeyError, lambda: node.tpdo[0x1BFF])
+        self.assertRaises(KeyError, lambda: node.pdo[0x15FF])
+
+    def test_pdo_iterate(self):
+        node = self.node
+        pdo_iter = iter(node.pdo.items())
+        prev = 0  # To check strictly increasing record index number
+        for rpdo, (index, pdo) in zip(node.rpdo.values(), pdo_iter):
+            self.assertIs(rpdo, pdo)
+            self.assertGreater(index, prev)
+            prev = index
+        # Continue consuming from pdo_iter
+        for tpdo, (index, pdo) in zip(node.tpdo.values(), pdo_iter):
+            self.assertIs(tpdo, pdo)
+            self.assertGreater(index, prev)
+            prev = index
+
+    def test_pdo_maps_iterate(self):
+        node = self.node
+        self.assertEqual(len(node.pdo), sum(1 for _ in node.pdo))
+        self.assertEqual(len(node.tpdo), sum(1 for _ in node.tpdo))
+        self.assertEqual(len(node.rpdo), sum(1 for _ in node.rpdo))
+        self.assertEqual(len(node.rpdo) + len(node.tpdo), len(node.pdo))
+
+        pdo = node.tpdo[1]
+        self.assertEqual(len(pdo), sum(1 for _ in pdo))
 
     async def test_pdo_map_getitem(self):
         await self.set_values()

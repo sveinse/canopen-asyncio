@@ -57,6 +57,15 @@ class TestSDOVariables(unittest.IsolatedAsyncioTestCase):
             for var in array.values():
                 self.assertIsInstance(var, canopen.sdo.SdoVariable)
 
+    def test_array_contains_non_int(self):
+        """SdoArray.__contains__ should handle non-int types gracefully."""
+        array = self.sdo_node[0x1003]
+        self.assertNotIn("not an int", array)
+        self.assertNotIn(None, array)
+
+    def test_get_variable_not_found(self):
+        self.assertIsNone(self.sdo_node.get_variable(0x9999))
+
 
 class TestSDOVariablesSync(TestSDOVariables):
     """ Run tests in non-asynchronous mode. """
@@ -123,8 +132,16 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
 
         # UNSIGNED8 without padded data part (see issue #5)
         self.data = [
-            (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),
-            (RX, b'\x4f\x00\x14\x02\xfe')
+            (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),  # upload initiate 0x1400:02
+            (RX, b'\x4f\x00\x14\x02\xfe'),              # expedited, size=1
+        ]
+        trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
+        self.assertEqual(trans_type, 254)
+
+        # Same with padding to a full SDO frame
+        self.data = [
+            (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),  # upload initiate 0x1400:02
+            (RX, b'\x42\x00\x14\x02\xfe\x00\x00\x00'),  # expedited, no size indicated
         ]
         if self.use_async:
             trans_type = await self.network[2].sdo[0x1400]['Transmission type RPDO 1'].aget_raw()
@@ -138,12 +155,12 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),
             (RX, b'\x42\x00\x14\x02\xfe\x00\x00\x00')
         ]
-        # Make sure the size of the data is 1 byte
+        # This method used to truncate to 1 byte, but returns raw content now
         if self.use_async:
             data = await self.network[2].sdo.aupload(0x1400, 2)
         else:
             data = self.network[2].sdo.upload(0x1400, 2)
-        self.assertEqual(data, b'\xfe')
+        self.assertEqual(data, b'\xfe\x00\x00\x00')
         self.assertTrue(self.message_sent)
 
     async def test_expedited_download(self):
@@ -175,6 +192,17 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         else:
             device_name = self.network[2].sdo[0x1008].raw
         self.assertEqual(device_name, "Tiny Node - Mega Domains !")
+
+    def test_segmented_upload_too_much_data(self):
+        # Server sends 5 bytes, but indicated size 4
+        self.data = [
+            (TX, b'\x40\x08\x10\x00\x00\x00\x00\x00'),  # upload initiate, 0x1008:00
+            (RX, b'\x41\x08\x10\x00\x04\x00\x00\x00'),  # segmented, size indicated, 4 bytes
+            (TX, b'\x60\x00\x00\x00\x00\x00\x00\x00'),  # upload segment
+            (RX, b'\x05\x54\x69\x6E\x79\x20\x00\x00'),  # segment complete, 5 bytes
+        ]
+        device_name = self.network[2].sdo[0x1008].raw
+        self.assertEqual(device_name, "Tiny")
 
     async def test_segmented_download(self):
         self.data = [

@@ -87,7 +87,7 @@ class LssMaster:
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self._node_id = 0
         self._data = None
-        self.responses = queue.Queue()
+        self.responses: queue.Queue[bytes] = queue.Queue()
 
     # FIXME: Async implementation of the public methods in this class
 

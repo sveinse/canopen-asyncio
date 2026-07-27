@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import logging
 import struct
-from collections.abc import Mapping, MutableMapping
-from typing import Dict, Iterator, List, Optional, TextIO, Union
+from collections.abc import Collection, Iterator, Mapping, MutableMapping
+from typing import Optional, TextIO, Union
 
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
@@ -160,7 +160,7 @@ class ObjectDictionary(MutableMapping):
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __contains__(self, index: Union[int, str]):
+    def __contains__(self, index: object) -> bool:
         return index in self.names or index in self.indices
 
     def add_object(self, obj: Union[ODArray, ODRecord, ODVariable]) -> None:
@@ -188,6 +188,7 @@ class ObjectDictionary(MutableMapping):
             return obj
         elif isinstance(obj, (ODRecord, ODArray)):
             return obj.get(subindex)
+        return None
 
 
 class ODRecord(MutableMapping):
@@ -206,9 +207,11 @@ class ODRecord(MutableMapping):
         #: Name of record
         self.name = name
         #: Storage location of index
-        self.storage_location = None
-        self.subindices = {}
-        self.names = {}
+        self.storage_location: Optional[str] = None
+        self.subindices: dict[int, ODVariable] = {}
+        self.names: dict[str, ODVariable] = {}
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
@@ -234,10 +237,12 @@ class ODRecord(MutableMapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return subindex in self.names or subindex in self.subindices
 
-    def __eq__(self, other: ODRecord) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODRecord):
+            return NotImplemented
         return self.index == other.index
 
     def add_member(self, variable: ODVariable) -> None:
@@ -259,21 +264,26 @@ class ODArray(Mapping):
 
     def __init__(self, name: str, index: int):
         #: The :class:`~canopen.ObjectDictionary` owning the record.
-        self.parent = None
+        self.parent: Optional[ObjectDictionary] = None
         #: 16-bit address of the array
         self.index = index
         #: Name of array
         self.name = name
         #: Storage location of index
-        self.storage_location = None
-        self.subindices = {}
-        self.names = {}
+        self.storage_location: Optional[str] = None
+        self.subindices: dict[int, ODVariable] = {}
+        self.names: dict[str, ODVariable] = {}
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
-        var = self.names.get(subindex) or self.subindices.get(subindex)
+        var = (
+            self.names.get(subindex)  # type: ignore[arg-type]
+            or self.subindices.get(subindex)  # type: ignore[arg-type]
+        )
         if var is not None:
             # This subindex is defined
             pass
@@ -285,9 +295,9 @@ class ODArray(Mapping):
             var.parent = self
             for attr in ("data_type", "unit", "factor", "min", "max", "default",
                          "access_type", "description", "value_descriptions",
-                         "bit_definitions", "storage_location"):
-                if attr in template.__dict__:
-                    var.__dict__[attr] = template.__dict__[attr]
+                         "bit_definitions", "storage_location", "custom_options"):
+                if (template_value := getattr(template, attr)) is not None:
+                    setattr(var, attr, template_value)
         else:
             raise KeyError(f"Could not find subindex {pretty_index(None, subindex)}")
         return var
@@ -298,7 +308,9 @@ class ODArray(Mapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __eq__(self, other: ODArray) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODArray):
+            return NotImplemented
         return self.index == other.index
 
     def add_member(self, variable: ODVariable) -> None:
@@ -339,7 +351,7 @@ class ODVariable:
         #: The :class:`~canopen.ObjectDictionary`,
         #: :class:`~canopen.objectdictionary.ODRecord` or
         #: :class:`~canopen.objectdictionary.ODArray` owning the variable
-        self.parent = None
+        self.parent: Union[ObjectDictionary, ODRecord, ODArray, None] = None
         #: 16-bit address of the object in the dictionary
         self.index = index
         #: 8-bit sub-index of the object in the dictionary
@@ -361,19 +373,23 @@ class ODVariable:
         #: The value of this variable stored in the object dictionary
         self.value: Optional[int] = None
         #: Data type according to the standard as an :class:`int`
-        self.data_type: Optional[int] = None
+        self.data_type: int = 0
         #: Access type, should be "rw", "ro", "wo", or "const"
         self.access_type: str = "rw"
+        #: The variable represents a DOMAIN ObjectType
+        self.is_domain: bool = False
         #: Description of variable
         self.description: str = ""
         #: Dictionary of value descriptions
-        self.value_descriptions: Dict[int, str] = {}
+        self.value_descriptions: dict[int, str] = {}
         #: Dictionary of bitfield definitions
-        self.bit_definitions: Dict[str, List[int]] = {}
+        self.bit_definitions: dict[str, list[int]] = {}
         #: Storage location of index
-        self.storage_location = None
+        self.storage_location: Optional[str] = None
         #: Can this variable be mapped to a PDO
         self.pdo_mappable = False
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         subindex = self.subindex if isinstance(self.parent, (ODRecord, ODArray)) else None
@@ -387,7 +403,9 @@ class ODVariable:
             return f"{self.parent.name}.{self.name}"
         return self.name
 
-    def __eq__(self, other: ODVariable) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODVariable):
+            return NotImplemented
         return (self.index == other.index and
                 self.subindex == other.subindex)
 
@@ -414,7 +432,7 @@ class ODVariable:
         """
         self.value_descriptions[value] = descr
 
-    def add_bit_definition(self, name: str, bits: List[int]) -> None:
+    def add_bit_definition(self, name: str, bits: list[int]) -> None:
         """Associate bit(s) with a string description.
 
         :param name: Name of bit(s)
@@ -472,7 +490,7 @@ class ODVariable:
                 return self.STRUCT_TYPES[self.data_type].pack(value)
             except struct.error:
                 raise ValueError("Value does not fit in specified type")
-        elif self.data_type is None:
+        elif not self.data_type:
             raise ObjectDictionaryError("Data type has not been specified")
         else:
             raise TypeError(
@@ -485,18 +503,17 @@ class ODVariable:
 
     def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
         if self.data_type in INTEGER_TYPES:
-            value /= self.factor
-            value = int(round(value))
+            if self.factor != 1:
+                value = round(value / self.factor)
         return value
 
     def decode_desc(self, value: int) -> str:
         if not self.value_descriptions:
             raise ObjectDictionaryError("No value descriptions exist")
-        elif value not in self.value_descriptions:
+        elif (desc := self.value_descriptions.get(value)) is None:
             raise ObjectDictionaryError(
                 f"No value description exists for {value}")
-        else:
-            return self.value_descriptions[value]
+        return desc
 
     def encode_desc(self, desc: str) -> int:
         if not self.value_descriptions:
@@ -509,27 +526,44 @@ class ODVariable:
         raise ValueError(
             f"No value corresponds to '{desc}'. Valid values are: {valid_values}")
 
-    def decode_bits(self, value: int, bits: List[int]) -> int:
-        try:
+    def decode_bits(self, value: int, bits: Union[str, Collection[int]]) -> int:
+        """Isolate and right-shift the specified bits from a given integer.
+
+        :param value: Variable value holding the bits
+        :param bits: Registered lookup name or concrete list of bit offsets
+        :return: Extracted bits, right-shifted to cut off to lowest specified offset
+        :raises KeyError: For unknown lookup names
+        """
+        if isinstance(bits, str):
             bits = self.bit_definitions[bits]
-        except (TypeError, KeyError):
-            pass
         mask = 0
         for bit in bits:
             mask |= 1 << bit
         return (value & mask) >> min(bits)
 
-    def encode_bits(self, original_value: int, bits: List[int], bit_value: int):
-        try:
+    def encode_bits(
+        self, original_value: int, bits: Union[str, Collection[int]], bit_value: int
+    ) -> int:
+        """Replace the specified bits with the given (unshifted) pattern.
+
+        The bit offsets sequence may be non-contiguous, but the replacement pattern
+        must specify all bits including the "holes".  It is only shifted once, so the
+        LSB lands at the lowest specified bit offset.
+
+        :param original_value: Variable value holding the bits
+        :param bits: Registered lookup name or concrete list of bit offsets
+        :param bit_value: Source pattern to overwrite with
+        :return: Merged value with the bits replaced
+        :raises KeyError: For unknown lookup names
+        """
+        if isinstance(bits, str):
             bits = self.bit_definitions[bits]
-        except (TypeError, KeyError):
-            pass
         temp = original_value
         mask = 0
         for bit in bits:
             mask |= 1 << bit
         temp &= ~mask
-        temp |= bit_value << min(bits)
+        temp |= (bit_value << min(bits)) & mask
         return temp
 
 

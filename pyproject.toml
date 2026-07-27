@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel", "setuptools_scm>=8"]
+requires = ["setuptools>=77", "wheel", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,10 +13,10 @@ authors = [
 description = "CANopen stack implementation"
 readme = "README.rst"
 requires-python = ">=3.9"
-license = {file = "LICENSE.txt"}
+license = "MIT"
+license-files = ["LICENSE.txt"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
     "Intended Audience :: Developers",
@@ -58,9 +58,19 @@ exclude = [
     "^setup.py*",
 ]
 
+[tool.ruff]
+line-length = 96
+[tool.ruff.lint.isort]
+case-sensitive = true
+order-by-type = false
+lines-after-imports = 2
+
+[tool.black]
+line-length = 96
+skip-string-normalization = true
+
 [tool.coverage.run]
 branch = true
-
 [tool.coverage.report]
 exclude_also = [
     'if TYPE_CHECKING:',

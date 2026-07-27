@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import binascii
+import contextlib
 import logging
 import math
 import threading
-from collections.abc import Mapping
-from typing import Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Union
+from collections.abc import Iterator, Mapping
+from typing import Callable, Optional, TYPE_CHECKING, Union
 
 import canopen.network
 from canopen import objectdictionary
@@ -35,24 +36,27 @@ class PdoBase(Mapping):
 
     def __init__(self, node: Union[LocalNode, RemoteNode]):
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
-        self.map: Optional[PdoMaps] = None
+        self.map: PdoMaps  # must initialize in derived classes
         self.node: Union[LocalNode, RemoteNode] = node
 
     def __iter__(self):
         return iter(self.map)
 
-    def __getitem__(self, key):
-        if isinstance(key, int) and (0x1A00 <= key <= 0x1BFF or   # By TPDO ID (512)
-                                     0x1600 <= key <= 0x17FF or   # By RPDO ID (512)
-                                     0 < key <= 512):             # By PDO Index
-            return self.map[key]
-        else:
-            for pdo_map in self.map.values():
-                try:
-                    return pdo_map[key]
-                except KeyError:
-                    # ignore if one specific PDO does not have the key and try the next one
-                    continue
+    def __getitem__(self, key: Union[int, str]):
+        if isinstance(key, int):
+            if key == 0:
+                raise KeyError("PDO index zero requested for 1-based sequence")
+            if (
+                0 < key <= 512  # By PDO Index
+                or 0x1400 <= key <= 0x1BFF  # By RPDO / TPDO mapping or communication record
+            ):
+                return self.map[key]
+        for pdo_map in self.map.values():
+            try:
+                return pdo_map[key]
+            except KeyError:
+                # ignore if one specific PDO does not have the key and try the next one
+                continue
         raise KeyError(f"PDO: {key} was not found in any map")
 
     def __len__(self):
@@ -108,7 +112,7 @@ class PdoBase(Mapping):
         :rtype: canmatrix.canmatrix.CanMatrix
         """
         try:
-            from canmatrix import canmatrix
+            from canmatrix import canmatrix  # type:ignore # (typing still in progress)
             from canmatrix import formats
         except ImportError:
             raise NotImplementedError("This feature requires the 'canopen[db_export]' feature")
@@ -154,17 +158,22 @@ class PdoBase(Mapping):
             pdo_map.stop()
 
 
-class PdoMaps(Mapping):
+class PdoMaps(Mapping[int, 'PdoMap']):
     """A collection of transmit or receive maps."""
 
-    def __init__(self, com_offset, map_offset, pdo_node: PdoBase, cob_base=None):
+    def __init__(self, com_offset: int, map_offset: int, pdo_node: PdoBase, cob_base=None):
         """
         :param com_offset:
         :param map_offset:
         :param pdo_node:
         :param cob_base:
         """
-        self.maps: Dict[int, PdoMap] = {}
+        self.maps: dict[int, PdoMap] = {}
+        self.com_offset = com_offset
+        self.map_offset = map_offset
+        if not com_offset and not map_offset:
+            # Skip generating entries without parameter index offsets
+            return
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(
@@ -177,7 +186,16 @@ class PdoMaps(Mapping):
                 self.maps[map_no + 1] = new_map
 
     def __getitem__(self, key: int) -> PdoMap:
-        return self.maps[key]
+        try:
+            return self.maps[key]
+        except KeyError:
+            if self.map_offset:
+                with contextlib.suppress(KeyError):
+                    return self.maps[key + 1 - self.map_offset]
+            if self.com_offset:
+                with contextlib.suppress(KeyError):
+                    return self.maps[key + 1 - self.com_offset]
+            raise
 
     def __iter__(self) -> Iterator[int]:
         return iter(self.maps)
@@ -210,7 +228,7 @@ class PdoMap:
         #: Ignores SYNC objects up to this SYNC counter value (optional)
         self.sync_start_value: Optional[int] = None
         #: List of variables mapped to this PDO
-        self.map: List[PdoVariable] = []
+        self.map: list[PdoVariable] = []
         self.length: int = 0
         #: Current message data
         self.data = bytearray()
@@ -225,7 +243,8 @@ class PdoMap:
         self._task = None
 
     def __repr__(self) -> str:
-        return f"<{type(self).__qualname__} {self.name!r} at COB-ID 0x{self.cob_id:X}>"
+        cob = f"0x{self.cob_id:X}" if self.cob_id else "Unassigned"
+        return f"<{type(self).__qualname__} {self.name!r} at COB-ID {cob}>"
 
     def __getitem_by_index(self, value):
         valid_values = []
@@ -567,7 +586,7 @@ class PdoMap:
         associated with read() or save(), if the local PDO setup is
         known to match what's stored on the node.
         """
-        if self.enabled:
+        if self.enabled and self.cob_id:
             logger.info("Subscribing to enabled PDO 0x%X on the network", self.cob_id)
             self.pdo_node.network.subscribe(self.cob_id, self.on_message)
 
@@ -614,7 +633,12 @@ class PdoMap:
         return var
 
     def transmit(self) -> None:
-        """Transmit the message once."""
+        """Transmit the message once.
+
+        :raises ValueError: When no COB-ID was assigned.
+        """
+        if not self.cob_id:
+            raise ValueError("A valid COB-ID has not been configured")
         self.pdo_node.network.send_message(self.cob_id, self.data)
 
     def start(self, period: Optional[float] = None) -> None:
@@ -623,7 +647,9 @@ class PdoMap:
         :param period:
             Transmission period in seconds.  Can be omitted if :attr:`period` has been set
             on the object before.
-        :raises ValueError: When neither the argument nor the :attr:`period` is given.
+
+        :raises ValueError:
+            When neither the argument nor the :attr:`period` is given, or no COB-ID assigned.
         """
         # Stop an already running transmission if we have one, otherwise we
         # overwrite the reference and can lose our handle to shut it down
@@ -634,6 +660,8 @@ class PdoMap:
 
         if not self.period:
             raise ValueError("A valid transmission period has not been given")
+        if not self.cob_id:
+            raise ValueError("A valid COB-ID has not been configured")
         logger.info("Starting %s with a period of %s seconds", self.name, self.period)
 
         self._task = self.pdo_node.network.send_periodic(
@@ -654,7 +682,7 @@ class PdoMap:
         """Send a remote request for the transmit PDO.
         Silently ignore if not allowed.
         """
-        if self.enabled and self.rtr_allowed:
+        if self.enabled and self.rtr_allowed and self.cob_id:
             self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
 
     @ensure_not_async  # NOTE: Safeguard for accidental async use

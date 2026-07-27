@@ -171,6 +171,15 @@ class TestDataConversions(unittest.TestCase):
         self.assertEqual(var.decode_raw(b"zero terminated\x00"), b"zero terminated\x00")
         self.assertEqual(var.encode_raw(b"testing"), b"testing")
 
+    def test_unknown_data_type(self):
+        var = od.ODVariable("Test unknown", 0x1000)
+        # data_type intentionally left at default (unset)
+        with self.assertRaises(od.ObjectDictionaryError):
+            var.encode_raw(42)
+        var.data_type = 0x7F  # from Device profile specific Standard Data types
+        with self.assertRaises(TypeError):
+            var.encode_raw(42)
+
 
 class TestAlternativeRepresentations(unittest.TestCase):
 
@@ -182,16 +191,62 @@ class TestAlternativeRepresentations(unittest.TestCase):
         self.assertAlmostEqual(var.decode_phys(128), 12.8)
         self.assertEqual(var.encode_phys(-0.1), -1)
 
+    def test_phys_factor_1_int64_roundtrip(self):
+        """int64 values must survive encode_phys when factor is 1."""
+        var = od.ODVariable("Test UNSIGNED64", 0x1000)
+        var.data_type = od.UNSIGNED64
+        value = 0x55554444AAAABBBB
+        self.assertEqual(var.encode_phys(value), value)
+
+    def test_phys_factor_1_preserves_int(self):
+        """encode_phys with factor=1 must not convert int to float."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        self.assertIsInstance(var.encode_phys(42), int)
+
+    def test_phys_factor_1000_rounds(self):
+        """Integer factor > 1 uses float rounding behaviour, not truncating division."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        var.factor = 1000
+        # 5555 / 1000 = 5.555 → round → 6
+        self.assertEqual(var.encode_phys(5555), 6)
+
+    def test_phys_float_factor(self):
+        """Float factor uses float division + round."""
+        var = od.ODVariable("Test INTEGER16", 0x1000)
+        var.data_type = od.INTEGER16
+        var.factor = 0.5
+        # 10 / 0.5 = 20
+        self.assertEqual(var.encode_phys(10), 20)
+
+    def test_phys_float_factor_decodes_to_float(self):
+        """decode_phys with float factor ensures a float result."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        var.factor = 1.0
+        self.assertIsInstance(var.decode_phys(42), float)
+
     def test_desc(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)
         var.data_type = od.UNSIGNED8
+        with self.assertRaises(od.ObjectDictionaryError):
+            var.decode_desc(0)
+        with self.assertRaises(od.ObjectDictionaryError):
+            var.encode_desc("")
+
         var.add_value_description(0, "Value 0")
         var.add_value_description(1, "Value 1")
         var.add_value_description(3, "Value 3")
 
         self.assertEqual(var.decode_desc(0), "Value 0")
         self.assertEqual(var.decode_desc(3), "Value 3")
+        with self.assertRaises(od.ObjectDictionaryError):
+            var.decode_desc(2)
+
         self.assertEqual(var.encode_desc("Value 1"), 1)
+        with self.assertRaises(ValueError):
+            var.encode_desc("UNDEFINED")
 
     def test_bits(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)
@@ -202,9 +257,25 @@ class TestAlternativeRepresentations(unittest.TestCase):
         self.assertEqual(var.decode_bits(1, "BIT 0"), 1)
         self.assertEqual(var.decode_bits(1, [1]), 0)
         self.assertEqual(var.decode_bits(0xf, [0, 1, 2, 3]), 15)
+        self.assertEqual(var.decode_bits(0xf, range(4)), 15)
         self.assertEqual(var.decode_bits(8, "BIT 2 and 3"), 2)
         self.assertEqual(var.encode_bits(0xf, [1], 0), 0xd)
         self.assertEqual(var.encode_bits(0, "BIT 0", 1), 1)
+
+        with self.assertRaises(KeyError):
+            var.decode_bits(0, "DOES NOT EXIST")
+        with self.assertRaises(KeyError):
+            var.encode_bits(0, "DOES NOT EXIST", 0)
+
+    def test_bits_sparse(self):
+        var = od.ODVariable("Test UNSIGNED8", 0x1000)
+        var.data_type = od.UNSIGNED8
+
+        self.assertEqual(var.decode_bits(0b11111111, [2, 5]), 0b1001)
+        self.assertEqual(var.decode_bits(0b11011011, [2, 5]), 0)
+        self.assertEqual(var.encode_bits(0b11111111, [2, 5], 0), 0b11011011)
+        self.assertEqual(var.encode_bits(0b00000000, [2, 5], 0b1001), 0b00100100)
+        self.assertEqual(var.encode_bits(0b00000000, [2, 5], 0b1111), 0b00100100)
 
 
 class TestObjectDictionary(unittest.TestCase):
@@ -260,6 +331,10 @@ class TestObjectDictionary(unittest.TestCase):
         self.assertIsInstance(item, od.ODArray)
         self.assertIs(item, array)
 
+    def test_get_variable_not_found(self):
+        test_od = od.ObjectDictionary()
+        self.assertIsNone(test_od.get_variable(0x9999))
+
 
 class TestArray(unittest.TestCase):
 
@@ -274,6 +349,24 @@ class TestArray(unittest.TestCase):
         self.assertEqual(array[1].name, "Test Variable")
         self.assertEqual(array[2].name, "Test Variable 2")
         self.assertEqual(array[3].name, "Test Variable_3")
+
+
+class TestEquality(unittest.TestCase):
+
+    def test_record_eq_wrong_type(self):
+        record = od.ODRecord("Test Record", 0x1001)
+        self.assertNotEqual(record, "not a record")
+        self.assertNotEqual(record, 42)
+
+    def test_array_eq_wrong_type(self):
+        array = od.ODArray("Test Array", 0x1002)
+        self.assertNotEqual(array, "not an array")
+        self.assertNotEqual(array, 42)
+
+    def test_variable_eq_wrong_type(self):
+        var = od.ODVariable("Test Variable", 0x1000, 0)
+        self.assertNotEqual(var, "not a variable")
+        self.assertNotEqual(var, 42)
 
 
 if __name__ == "__main__":

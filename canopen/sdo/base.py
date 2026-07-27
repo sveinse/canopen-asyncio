@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import binascii
-from collections.abc import Mapping
-from typing import Iterator, Optional, Union
+from collections.abc import Iterator, Mapping
+from typing import Optional, Union
 
 import canopen.network
 from canopen import objectdictionary
@@ -65,7 +65,7 @@ class SdoBase(Mapping):
     def __len__(self) -> int:
         return len(self.od)
 
-    def __contains__(self, key: Union[int, str]) -> bool:
+    def __contains__(self, key: object) -> bool:
         return key in self.od
 
     def get_variable(
@@ -80,6 +80,7 @@ class SdoBase(Mapping):
             return obj
         elif isinstance(obj, (SdoRecord, SdoArray)):
             return obj.get(subindex)
+        return None
 
     def upload(self, index: int, subindex: int) -> bytes:
         raise NotImplementedError()
@@ -136,7 +137,7 @@ class SdoRecord(Mapping):
     async def alen(self) -> int:
         return len(self.od)
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return subindex in self.od
 
 
@@ -170,7 +171,7 @@ class SdoArray(Mapping):
     async def alen(self) -> int:
         return await self[0].aget_raw()  # type: ignore[return-value]
 
-    def __contains__(self, subindex: int) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return 0 <= subindex <= len(self)
 
 
@@ -186,7 +187,18 @@ class SdoVariable(variable.Variable):
 
     @ensure_not_async  # NOTE: Safeguard for accidental async use
     def get_data(self) -> bytes:
-        return self.sdo_node.upload(self.od.index, self.od.subindex)
+        data = self.sdo_node.upload(self.od.index, self.od.subindex)
+        response_size = len(data)
+
+        # If size is available through variable in OD, then use the smaller of the two sizes.
+        # Some devices send U32/I32 even if variable is smaller in OD
+        if self.od.fixed_size:
+            # Get the size in bytes for this variable
+            var_size = len(self.od) // 8
+            if response_size is None or var_size < response_size:
+                # Truncate the data to specified size
+                data = data[:var_size]
+        return data
 
     async def aget_data(self) -> bytes:
         return await self.sdo_node.aupload(self.od.index, self.od.subindex)
