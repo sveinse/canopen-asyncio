@@ -38,9 +38,9 @@ class Network(MutableMapping):
         """
         #: A python-can :class:`can.BusABC` instance which is set after
         #: :meth:`canopen.Network.connect` is called
-        self.bus: Optional[can.BusABC] = bus
-        self.loop: Optional[asyncio.AbstractEventLoop] = loop
-        self._tasks: set[asyncio.Task] = set()
+        self.bus = bus
+        self.loop = loop
+        self._futures: set[asyncio.Future] = set()
         #: A :class:`~canopen.network.NodeScanner` for detecting nodes
         self.scanner = NodeScanner(self)
         #: List of :class:`can.Listener` objects.
@@ -61,7 +61,7 @@ class Network(MutableMapping):
         # Enable the async guard for this thread if running an event loop.
         # This enables the @ensure_not_async() guard to protect against
         # accidental calling of blocking functions.
-        set_async_sentinel(self.is_async())
+        set_async_sentinel(self.is_async)
 
         self.subscribe(self.lss.LSS_RX_COBID, self.lss.on_message_received)
 
@@ -120,12 +120,6 @@ class Network(MutableMapping):
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
         if self.notifier is None:
-            # Do not start a can notifier with the async loop. It changes the
-            # behavior of the notifier callbacks. Instead of running the
-            # callbacks from a separate thread, it runs the callbacks in the
-            # same thread as the event loop where blocking calls are not allowed.
-            # This library needs to support both async and sync, so we need to
-            # use the notifier in a separate thread.
             self.notifier = can.Notifier(self.bus, [], self.NOTIFIER_CYCLE)
         for listener in self.listeners:
             self.notifier.add_listener(listener)
@@ -303,7 +297,7 @@ class Network(MutableMapping):
         # Exceptions in any callbaks should not affect CAN processing
         logger.exception("Exception in callback: %s", exc_info=exc)
 
-    def dispatch_callbacks(self, callbacks: List[Callback], *args) -> None:
+    def dispatch_callbacks(self, callbacks: list[Callback], *args) -> None:
         """Dispatch a list of callbacks with the given arguments.
 
         :param callbacks:
@@ -311,14 +305,11 @@ class Network(MutableMapping):
         :param args:
             Arguments to pass to the callbacks
         """
-        def task_done(task: asyncio.Task) -> None:
+        def task_done(future: asyncio.Future) -> None:
             """Callback to be called when a task is done."""
-            self._tasks.discard(task)
-
-            # FIXME: This section should probably be migrated to a TaskGroup.
-            # However, this is not available yet in Python 3.8 - 3.10.
+            self._futures.discard(future)
             try:
-                if (exc := task.exception()) is not None:
+                if (exc := future.exception()) is not None:
                     self.on_error(exc)
             except (asyncio.CancelledError, asyncio.InvalidStateError) as exc:
                 # Handle cancelled tasks and unfinished tasks gracefully
@@ -327,9 +318,12 @@ class Network(MutableMapping):
         # Run the callbacks
         for callback in callbacks:
             result = callback(*args)
-            if result is not None and asyncio.iscoroutine(result):
-                task = asyncio.create_task(result)
-                self._tasks.add(task)
+            if result is not None and self.loop is not None and asyncio.iscoroutine(result):
+                # This function may be called from the rx thread, so it must
+                # be thread-safe. We cannot use asyncio.create_task() here, since
+                # it is not thread-safe.
+                task = asyncio.run_coroutine_threadsafe(result, self.loop)
+                self._futures.add(task)
                 task.add_done_callback(task_done)
 
     def check(self) -> None:
@@ -344,6 +338,7 @@ class Network(MutableMapping):
                 logger.error("An error has caused receiving of messages to stop")
                 raise exc
 
+    @property
     def is_async(self) -> bool:
         """Check if canopen has been connected with async"""
         return self.loop is not None

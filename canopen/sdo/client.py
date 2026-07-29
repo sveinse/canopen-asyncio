@@ -139,20 +139,9 @@ class SdoClient(SdoBase):
         with self.open(index, subindex, buffering=0) as fp:
             response_size = fp.size
             data = fp.read()
-        return self.truncate_data(index, subindex, data, response_size)
 
-    def truncate_data(self, index: int, subindex: int, data: bytes, size: int) -> bytes:
-        # If size is available through variable in OD, then use the smaller of the two sizes.
-        # Some devices send U32/I32 even if variable is smaller in OD
-        var = self.od.get_variable(index, subindex)
-        if var is not None:
-            # Found a matching variable in OD
-            if var.fixed_size:
-                # Get the size in bytes for this variable
-                var_size = len(var) // 8
-                if size is None or var_size < size:
-                    # Truncate the data to specified size
-                    data = data[0:var_size]
+        if response_size and response_size < len(data):
+            data = data[:response_size]
         return data
 
     async def aupload(self, index: int, subindex: int) -> bytes:
@@ -173,7 +162,10 @@ class SdoClient(SdoBase):
                 return data, response_size
 
             data, response_size = await asyncio.to_thread(_upload)
-            return self.truncate_data(index, subindex, data, response_size)
+
+            if response_size and response_size < len(data):
+                data = data[:response_size]
+            return data
 
     @ensure_not_async
     def download(

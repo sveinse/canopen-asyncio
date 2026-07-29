@@ -1,5 +1,5 @@
-CANopen for Python, asyncio port
-================================
+CANopen for Python
+==================
 
 A Python implementation of the CANopen_ standard.
 The aim of the project is to support the most common parts of the CiA 301
@@ -8,7 +8,10 @@ automation tasks rather than a standard compliant master implementation.
 
 The library supports Python 3.9 or newer.
 
-This library is the asyncio port of CANopen. See below for code example.
+The library can be run in two modes: regular mode or in async mode. In regular
+mode, calls to the library may block until a response is ready. In async mode
+it is possible to read and write to more than one node at the same time
+without the need of multiple threads.
 
 
 Asyncio port
@@ -32,8 +35,6 @@ Difference between async and non-async version
 ----------------------------------------------
 
 This port have some differences with the upstream non-async version of canopen.
-
-* Minimum python version is 3.9, while the upstream version supports 3.8.
 
 * The :code:`Network` accepts additional parameters than upstream. It accepts
   :code:`loop` which selects the mode of operation. If :code:`None` it will

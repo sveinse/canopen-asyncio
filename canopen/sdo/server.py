@@ -222,7 +222,7 @@ class SdoServer(SdoBase):
         """
         return self._node.get_data(index, subindex)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async
     def download(
         self,
         index: int,

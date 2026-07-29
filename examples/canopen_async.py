@@ -32,7 +32,7 @@ async def do_loop(network: canopen.Network, nodeid):
             continue
 
         # Get TPDO value
-        # PDO values are accessed non-synchronously using attributes
+        # PDO values are accessed directly, no await required
         state = node.tpdo[1]['state'].raw
 
         # If state send RPDO to remote
@@ -50,7 +50,7 @@ async def amain():
     # Create the canopen network and connect it to the CAN bus
     loop = asyncio.get_running_loop()
     async with canopen.Network(loop=loop).connect(
-        interface='virtual', bitrate=1000000, recieve_own_messages=True
+        interface='virtual', bitrate=1000000, receive_own_messages=True
     ) as network:
 
         # Start two instances and run them concurrently

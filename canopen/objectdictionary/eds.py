@@ -211,7 +211,7 @@ def import_from_node(node_id: int, network: canopen.network.Network):
 
 
 async def aimport_from_node(node_id: int, network: canopen.network.Network):
-    """ Download the configuration from the remote node
+    """ Download the configuration from the remote node, async variant
     :param int node_id: Identifier of the node
     :param network: network object
     """
