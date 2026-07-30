@@ -8,7 +8,7 @@ from typing import Callable, Final, Optional, Union
 
 import can
 
-from canopen.async_guard import set_async_sentinel, ensure_not_async
+from canopen.async_guard import is_async_guarded, enable_async_guard
 from canopen.lss import LssMaster
 from canopen.nmt import NmtMaster
 from canopen.node import LocalNode, RemoteNode
@@ -57,12 +57,6 @@ class Network(MutableMapping):
 
         self.lss = LssMaster()
         self.lss.network = self
-
-        # Enable the async guard for this thread if running an event loop.
-        # This enables the @ensure_not_async() guard to protect against
-        # accidental calling of blocking functions.
-        set_async_sentinel(self.is_async)
-
         self.subscribe(self.lss.LSS_RX_COBID, self.lss.on_message_received)
 
     def subscribe(self, can_id: int, callback: Callback) -> None:
@@ -144,9 +138,6 @@ class Network(MutableMapping):
             # Release notifier after check
             self.notifier = None
 
-        # Remove the async sentinel
-        set_async_sentinel(False)
-
     def __enter__(self):
         return self
 
@@ -162,7 +153,21 @@ class Network(MutableMapping):
     async def __aexit__(self, type, value, traceback):
         self.disconnect()
 
-    @ensure_not_async
+    async def enable_async_guard(self, enable: bool = True) -> None:
+        """Enable or disable the async guard for this network.
+
+        This makes sure that all functions that are decorated with
+        :code:`@ensure_not_async` will raise a RuntimeError if called from the
+        async main thread.
+
+        This function is deliberately async, to ensure that it is called from
+        the async main thread.
+
+        :param enable:
+            If True, enable the async guard. If False, disable it.
+        """
+        enable_async_guard(enable)
+
     def add_node(
         self,
         node: Union[int, RemoteNode, LocalNode],
@@ -444,8 +449,18 @@ class MessageListener(can.Listener):
 
     def __init__(self, network: Network):
         self.network = network
+        self._warning_logged = False
 
     def on_message_received(self, msg):
+
+        if not self._warning_logged:
+            self._warning_logged = True
+            if is_async_guarded():
+                logger.warning(
+                    "MessageListener.on_message_received() called from async mainloop. "
+                    "This may affect the async performance."
+                )
+
         if msg.is_error_frame or msg.is_remote_frame:
             return
 

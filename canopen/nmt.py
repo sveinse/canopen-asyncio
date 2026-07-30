@@ -121,7 +121,6 @@ class NmtMaster(NmtBase):
         self.state_update = threading.Condition()
         self._callbacks: list[Callable[[int], None]] = []
 
-    @ensure_not_async
     def on_heartbeat(self, can_id, data, timestamp):
         new_state, = struct.unpack_from("B", data)
         # Mask out toggle bit
@@ -152,7 +151,7 @@ class NmtMaster(NmtBase):
             "Sending NMT command 0x%X to node %d", code, self.id)
         self.network.send_message(0, [code, self.id])
 
-    @ensure_not_async
+    @ensure_not_async("Use await_for_heartbeat() instead")
     def wait_for_heartbeat(self, timeout: float = 10):
         """Wait until a heartbeat message is received."""
         with self.state_update:
@@ -166,7 +165,7 @@ class NmtMaster(NmtBase):
         """Wait until a heartbeat message is received."""
         return await asyncio.to_thread(self.wait_for_heartbeat, timeout)
 
-    @ensure_not_async
+    @ensure_not_async("Use await_for_bootup() instead")
     def wait_for_bootup(self, timeout: float = 10) -> None:
         """Wait until a boot-up message is received."""
         end_time = time.time() + timeout

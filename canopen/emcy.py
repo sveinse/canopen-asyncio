@@ -28,7 +28,6 @@ class EmcyConsumer:
         self.emcy_received = threading.Condition()
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
 
-    @ensure_not_async
     def on_emcy(self, can_id, data, timestamp):
         code, register, data = EMCY_STRUCT.unpack(data)
         entry = EmcyError(code, register, data, timestamp)
@@ -59,7 +58,7 @@ class EmcyConsumer:
         self.log = []
         self.active = []
 
-    @ensure_not_async
+    @ensure_not_async("Use async_wait() instead")
     def wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
     ) -> Optional[EmcyError]:

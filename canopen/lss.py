@@ -243,7 +243,7 @@ class LssMaster:
         message[0] = CS_IDENTIFY_NON_CONFIGURED_REMOTE_SLAVE
         self.__send_command(message)
 
-    @ensure_not_async
+    @ensure_not_async("Use afast_scan() instead")
     def fast_scan(self):
         """This command sends a series of fastscan message
         to find unconfigured slave with lowest number of LSS idenities
@@ -402,7 +402,6 @@ class LssMaster:
 
         return response
 
-    @ensure_not_async
     def on_message_received(self, can_id, data, timestamp):
         self.responses.put(bytes(data))
 

@@ -184,7 +184,7 @@ class SdoVariable(variable.Variable):
     def __await__(self):
         return self.aget_raw().__await__()
 
-    @ensure_not_async
+    @ensure_not_async("Use aget_data() instead")
     def get_data(self) -> bytes:
         data = self.sdo_node.upload(self.od.index, self.od.subindex)
         response_size = len(data)
@@ -202,7 +202,7 @@ class SdoVariable(variable.Variable):
     async def aget_data(self) -> bytes:
         return await self.sdo_node.aupload(self.od.index, self.od.subindex)
 
-    @ensure_not_async
+    @ensure_not_async("Use aset_data() instead")
     def set_data(self, data: bytes):
         force_segment = self.od.data_type == objectdictionary.DOMAIN
         self.sdo_node.download(self.od.index, self.od.subindex, data, force_segment)
@@ -219,7 +219,7 @@ class SdoVariable(variable.Variable):
     def readable(self) -> bool:
         return self.od.readable
 
-    @ensure_not_async
+    @ensure_not_async("Use aopen() instead")
     def open(self, mode="rb", encoding="ascii", buffering=1024, size=None,
              block_transfer=False, request_crc_support=True):
         """Open the data stream as a file like object.

@@ -116,7 +116,7 @@ class SdoClient(SdoBase):
         """Abort current transfer. Async version."""
         return await asyncio.to_thread(self.abort, abort_code)
 
-    @ensure_not_async
+    @ensure_not_async("Use aupload() instead")
     def upload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary.
 
@@ -167,7 +167,7 @@ class SdoClient(SdoBase):
                 data = data[:response_size]
             return data
 
-    @ensure_not_async
+    @ensure_not_async("Use adownload() instead")
     def download(
         self,
         index: int,
@@ -215,7 +215,7 @@ class SdoClient(SdoBase):
 
             return await asyncio.to_thread(_download)
 
-    @ensure_not_async
+    @ensure_not_async("This function is not async compatible. Use aupload() or adownload() instead")
     def open(self, index, subindex=0, mode="rb", encoding="ascii",
              buffering=1024, size=None, block_transfer=False, force_segment=False, request_crc_support=True):
         """Open the data stream as a file like object.

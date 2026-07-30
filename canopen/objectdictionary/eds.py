@@ -7,7 +7,7 @@ import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
 from typing import Any, TYPE_CHECKING
 
-from canopen.async_guard import ensure_not_async
+from canopen.async_guard import ensure_not_async, is_async_guarded
 from canopen.objectdictionary import (
     ODArray,
     ODRecord,
@@ -33,6 +33,12 @@ def import_eds(source, node_id):
         if hasattr(source, "read"):
             fp = source
         else:
+            if is_async_guarded():
+                logger.warning(
+                    "Opening EDS file %s in async is not recommended, "
+                    "use a thread or pass a file-like object instead",
+                    source
+                )
             fp = open(source)
             opened_here = True
         eds.read_file(fp)
@@ -186,7 +192,7 @@ def import_eds(source, node_id):
     return od
 
 
-@ensure_not_async
+@ensure_not_async("Use aimport_from_node() instead")
 def import_from_node(node_id: int, network: canopen.network.Network):
     """ Download the configuration from the remote node
     :param int node_id: Identifier of the node

@@ -191,7 +191,6 @@ class SdoServer(SdoBase):
         self.send_response(data)
         # logger.error("Transfer aborted with code 0x%08X", abort_code)
 
-    @ensure_not_async
     def upload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary.
 

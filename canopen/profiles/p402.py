@@ -221,7 +221,7 @@ class BaseNode402(RemoteNode):
     TIMEOUT_HOMING_DEFAULT = 30         # seconds
 
     # As the class is not async compatible, ensure async is not running
-    @ensure_not_async
+    @ensure_not_async("BaseNode402 is not async compatible")
     def __init__(self, node_id, object_dictionary):
         super(BaseNode402, self).__init__(node_id, object_dictionary)
         self.tpdo_values = {}  # { index: value from last received TPDO }

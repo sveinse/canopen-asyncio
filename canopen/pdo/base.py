@@ -62,7 +62,7 @@ class PdoBase(Mapping):
     def __len__(self):
         return len(self.map)
 
-    @ensure_not_async
+    @ensure_not_async("Use aread() instead")
     def read(self, from_od=False):
         """Read PDO configuration from node using SDO."""
         for pdo_map in self.map.values():
@@ -73,7 +73,7 @@ class PdoBase(Mapping):
         for pdo_map in self.map.values():
             await pdo_map.aread(from_od=from_od)
 
-    @ensure_not_async
+    @ensure_not_async("Use asave() instead")
     def save(self):
         """Save PDO configuration to node using SDO."""
         for pdo_map in self.map.values():
@@ -342,7 +342,6 @@ class PdoMap:
         # Unknown transmission type, assume non-periodic
         return False
 
-    @ensure_not_async
     def on_message(self, can_id, data, timestamp):
         is_transmitting = self._task is not None
         if can_id == self.cob_id and not is_transmitting:
@@ -422,7 +421,7 @@ class PdoMap:
 
         self.subscribe()
 
-    @ensure_not_async
+    @ensure_not_async("Use aread() instead")
     def read(self, from_od=False) -> None:
         """Read PDO configuration for this map.
 
@@ -556,7 +555,7 @@ class PdoMap:
             yield self.com_record[1], cob_id
             self.subscribe()
 
-    @ensure_not_async
+    @ensure_not_async("Use asave() instead")
     def save(self) -> None:
         """Read PDO configuration for this map using SDO."""
         for sdo, value in self.save_generator():
@@ -680,7 +679,7 @@ class PdoMap:
         if self.enabled and self.rtr_allowed and self.cob_id:
             self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
 
-    @ensure_not_async
+    @ensure_not_async("Use await_for_reception() instead")
     def wait_for_reception(self, timeout: float = 10) -> float:
         """Wait for the next transmit PDO.
 
