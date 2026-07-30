@@ -168,7 +168,7 @@ class SdoArray(Mapping):
         return self[0].raw
 
     async def alen(self) -> int:
-        return await self[0].aget_raw()  # type: ignore[return-value]
+        return await self[0].aread()  # type: ignore[return-value]
 
     def __contains__(self, subindex: object) -> bool:
         return 0 <= subindex <= len(self)
@@ -180,9 +180,6 @@ class SdoVariable(variable.Variable):
     def __init__(self, sdo_node: SdoBase, od: objectdictionary.ODVariable):
         self.sdo_node = sdo_node
         variable.Variable.__init__(self, od)
-
-    def __await__(self):
-        return self.aget_raw().__await__()
 
     @ensure_not_async("Use aget_data() instead")
     def get_data(self) -> bytes:

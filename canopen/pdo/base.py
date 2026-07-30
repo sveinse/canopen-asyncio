@@ -467,7 +467,7 @@ class PdoMap:
                     value = param.od.default
             else:
                 # Get value from SDO
-                value = await param.aget_raw()
+                value = await param.aread()
             try:
                 param = gen.send(value)
             except StopIteration:
@@ -568,9 +568,9 @@ class PdoMap:
         """Read PDO configuration for this map using SDO, async variant."""
         for sdo, value in self.save_generator():
             if value == '@@fillmap':
-                self._fill_map(await sdo.aget_raw())
+                self._fill_map(await sdo.aread())
             else:
-                await sdo.aset_raw(value)
+                await sdo.awrite(value)
 
     def subscribe(self) -> None:
         """Register the PDO for reception on the network.

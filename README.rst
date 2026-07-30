@@ -56,14 +56,14 @@ This port have some differences with the upstream non-async version of canopen.
       var = sdo['Variable'].raw  # synchronous
       sdo['Variable'].raw = 12   # synchronous
 
-      var = await sdo['Variable'].get_raw()  # async
-      await sdo['Variable'].set_raw(12)      # async
+      var = await sdo['Variable']       # async
+      await sdo['Variable'].awrite(12)  # async
 
 * Installed :code:`ensure_not_async()` sentinel guard in functions which
   prevents calling blocking functions in async context. It will raise the
   exception :code:`RuntimeError` "Calling a blocking function" when this
-  happen. If this is encountered, it is likely that the code is not using the
-  async variants of the library.
+  happen. If this is encountered, the code is not using the async variants
+  of the library when it shouldn't.
 
 * The mechanism for CAN bus callbacks have been changed. Callbacks might be
   async, which means they cannot be called immediately. This affects how
@@ -78,14 +78,14 @@ This port have some differences with the upstream non-async version of canopen.
 
 * SDO block upload and download is not yet supported in async mode.
 
-* :code:`ODVariable.__len__()` returns 64 bits instead of 8 bits to support
-  truncated 24-bits integers, see #436
-
 * :code:`BaseNode402` does not work with async
 
 * :code:`LssMaster` does not work with async, except :code:`LssMaster.fast_scan()`
 
-* :code:`Bits` is not working in async
+* :code:`Bits` is not working differently in async mode. In non-async mode,
+  the raw value is read from the node when the :code:`Bits` object is created.
+  In async mode, the raw value must be manually read by calling
+  :code:`await bits.aread()` before accessing the bits.
 
 
 Features
@@ -259,7 +259,7 @@ This is the same example as above, but using asyncio
         node.nmt.set_state('OPERATIONAL')
 
         # Set motor speed via SDO
-        await node.sdo['MotorSpeed'].aset_raw(2)
+        await node.sdo['MotorSpeed'].awrite(2)
 
         while True:
 
@@ -269,14 +269,14 @@ This is the same example as above, but using asyncio
                 continue
 
             # Get the TPDO 1 value
-            rpm = node.tpdo[1]['MotorSpeed Actual'].get_raw()
+            rpm = node.tpdo[1]['MotorSpeed Actual'].raw
             print(f'SPEED on motor {nodeid}:', rpm)
 
             # Sleep a little
             await asyncio.sleep(0.2)
 
             # Send RPDO 1 with some data
-            node.rpdo[1]['Some variable'].set_phys(42)
+            node.rpdo[1]['Some variable'].awrite(42, "phys")
             node.rpdo[1].transmit()
 
     async def main():

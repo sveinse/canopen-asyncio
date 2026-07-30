@@ -20,7 +20,7 @@ async def do_loop(network: canopen.Network, nodeid):
     node.nmt.state = 'OPERATIONAL'
 
     # Set SDO
-    await node.sdo['something'].aset_raw(2)
+    await node.sdo['something'].awrite(2)
 
     i = 0
     while True:
