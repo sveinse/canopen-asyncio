@@ -1,32 +1,30 @@
 import unittest
-import asyncio
 
 import canopen
-from canopen.async_guard import AllowBlocking
 import canopen.objectdictionary.datatypes as dt
 from canopen.objectdictionary import ODVariable
 
 from .util import DATATYPES_EDS, SAMPLE_EDS
+from .async_tests import DualSyncAsyncTestCase
 
 
 TX = 1
 RX = 2
 
 
-class TestSDOVariables(unittest.IsolatedAsyncioTestCase):
+class TestSDOVariables(DualSyncAsyncTestCase):
     """Some basic assumptions on the behavior of SDO variable objects.
 
     Mostly what is stated in the API docs.
     """
-
     __test__ = False  # This is a base class, tests should not be run directly.
-    async_test: bool
 
     def setUp(self):
+        super().setUp()
         node = canopen.LocalNode(1, SAMPLE_EDS)
         self.sdo_node = node.sdo
 
-    async def test_record_iter_length(self):
+    def test_record_iter_length(self):
         """Assume the "highest subindex supported" entry is not counted.
 
         Sub-objects without an OD entry should be skipped as well.
@@ -39,13 +37,21 @@ class TestSDOVariables(unittest.IsolatedAsyncioTestCase):
     async def test_array_iter_length(self):
         """Assume the "highest subindex supported" entry is not counted."""
         array = self.sdo_node[0x1003]
-        subs = sum(1 for _ in iter(array))
-        self.assertEqual(len(array), 3)
-        self.assertEqual(subs, 3)
-        # Simulate more entries getting added dynamically
-        array[0].set_data(b'\x08')
-        subs = sum(1 for _ in iter(array))
-        self.assertEqual(subs, 8)
+        if self.async_test:
+            subs = len([_ async for _ in array.aiter()])
+            self.assertEqual(await array.alen(), 3)
+            # Simulate more entries getting added dynamically
+            await array[0].aset_data(b'\x08')
+            subs = len([_ async for _ in array.aiter()])
+            self.assertEqual(subs, 8)
+        else:
+            subs = sum(1 for _ in iter(array))
+            self.assertEqual(len(array), 3)
+            self.assertEqual(subs, 3)
+            # Simulate more entries getting added dynamically
+            array[0].set_data(b'\x08')
+            subs = sum(1 for _ in iter(array))
+            self.assertEqual(subs, 8)
 
     async def test_array_members_dynamic(self):
         """Check if sub-objects missing from OD entry are generated dynamically."""
@@ -79,14 +85,12 @@ class TestSDOVariablesAsync(TestSDOVariables):
     async_test = True
 
 
-class TestSDO(unittest.IsolatedAsyncioTestCase):
+class TestSDO(DualSyncAsyncTestCase):
     """
     Test SDO traffic by example. Most are taken from
     http://www.canopensolutions.com/english/about_canopen/device_configuration_canopen.shtml
     """
-
     __test__ = False  # This is a base class, tests should not be run directly.
-    async_test: bool
 
     def _send_message(self, can_id, data, remote=False):
         """Will be used instead of the usual Network.send_message method.
@@ -104,17 +108,22 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         self.message_sent = True
 
     def setUp(self):
-        loop = None
-        if self.async_test:
-            loop = asyncio.get_event_loop()
+        super().setUp()
 
-        network = canopen.Network(loop=loop)
+        network = canopen.Network(loop=self.loop)
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.send_message = self._send_message
-        with AllowBlocking():
-            node = network.add_node(2, SAMPLE_EDS)
+        node = network.add_node(2, SAMPLE_EDS)
         node.sdo.RESPONSE_TIMEOUT = 0.01
         self.network = network
+
+    async def asyncSetUp(self):
+        if self.async_test:
+            await self.network.__aenter__()
+
+    async def asyncTearDown(self):
+        if self.async_test:
+            await self.network.__aexit__(None, None, None)
 
     def tearDown(self):
         self.network.disconnect()
@@ -125,7 +134,7 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (RX, b'\x43\x18\x10\x01\x04\x00\x00\x00')
         ]
         if self.async_test:
-            vendor_id = await self.network[2].sdo[0x1018][1].aget_raw()
+            vendor_id = await self.network[2].sdo[0x1018][1]
         else:
             vendor_id = self.network[2].sdo[0x1018][1].raw
         self.assertEqual(vendor_id, 4)
@@ -135,7 +144,10 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),  # upload initiate 0x1400:02
             (RX, b'\x4f\x00\x14\x02\xfe'),              # expedited, size=1
         ]
-        trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
+        if self.async_test:
+            trans_type = await self.network[2].sdo[0x1400]['Transmission type RPDO 1']
+        else:
+            trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
         self.assertEqual(trans_type, 254)
 
         # Same with padding to a full SDO frame
@@ -144,7 +156,7 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (RX, b'\x42\x00\x14\x02\xfe\x00\x00\x00'),  # expedited, no size indicated
         ]
         if self.async_test:
-            trans_type = await self.network[2].sdo[0x1400]['Transmission type RPDO 1'].aget_raw()
+            trans_type = await self.network[2].sdo[0x1400]['Transmission type RPDO 1']
         else:
             trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
         self.assertEqual(trans_type, 254)
@@ -169,7 +181,7 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (RX, b'\x60\x17\x10\x00\x00\x00\x00\x00')
         ]
         if self.async_test:
-            await self.network[2].sdo[0x1017].aset_raw(4000)
+            await self.network[2].sdo[0x1017].awrite(4000)
         else:
             self.network[2].sdo[0x1017].raw = 4000
         self.assertTrue(self.message_sent)
@@ -188,12 +200,12 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (RX, b'\x15\x69\x6E\x73\x20\x21\x00\x00')
         ]
         if self.async_test:
-            device_name = await self.network[2].sdo[0x1008].aget_raw()
+            device_name = await self.network[2].sdo[0x1008]
         else:
             device_name = self.network[2].sdo[0x1008].raw
         self.assertEqual(device_name, "Tiny Node - Mega Domains !")
 
-    def test_segmented_upload_too_much_data(self):
+    async def test_segmented_upload_too_much_data(self):
         # Server sends 5 bytes, but indicated size 4
         self.data = [
             (TX, b'\x40\x08\x10\x00\x00\x00\x00\x00'),  # upload initiate, 0x1008:00
@@ -201,7 +213,10 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (TX, b'\x60\x00\x00\x00\x00\x00\x00\x00'),  # upload segment
             (RX, b'\x05\x54\x69\x6E\x79\x20\x00\x00'),  # segment complete, 5 bytes
         ]
-        device_name = self.network[2].sdo[0x1008].raw
+        if self.async_test:
+            device_name = await self.network[2].sdo[0x1008]
+        else:
+            device_name = self.network[2].sdo[0x1008].raw
         self.assertEqual(device_name, "Tiny")
 
     async def test_segmented_download(self):
@@ -214,11 +229,11 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (RX, b'\x30\x00\x20\x00\x00\x00\x00\x00')
         ]
         if self.async_test:
-            await self.network[2].sdo['Writable string'].aset_raw('A long string')
+            await self.network[2].sdo['Writable string'].awrite('A long string')
         else:
             self.network[2].sdo['Writable string'].raw = 'A long string'
 
-    async def test_block_download(self):
+    def test_block_download(self):
         self.data = [
             (TX, b'\xc6\x00\x20\x00\x1e\x00\x00\x00'),
             (RX, b'\xa4\x00\x20\x00\x7f\x00\x00\x00'),
@@ -234,10 +249,9 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         data = b'A really really long string...'
         if self.async_test:
             self.skipTest("Async SDO block download not implemented yet")
-        else:
-            with self.network[2].sdo['Writable string'].open(
-                'wb', size=len(data), block_transfer=True) as fp:
-                fp.write(data)
+        with self.network[2].sdo['Writable string'].open(
+            'wb', size=len(data), block_transfer=True) as fp:
+            fp.write(data)
 
     async def test_segmented_download_zero_length(self):
         self.data = [
@@ -247,12 +261,12 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             (RX, b'\x20\x00\x00\x00\x00\x00\x00\x00'),
         ]
         if self.async_test:
-            await self.network[2].sdo[0x2000].aset_raw("")
+            await self.network[2].sdo[0x2000].awrite("")
         else:
             self.network[2].sdo[0x2000].raw = ""
         self.assertTrue(self.message_sent)
 
-    async def test_block_upload(self):
+    def test_block_upload(self):
         self.data = [
             (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),
             (RX, b'\xc6\x08\x10\x00\x1a\x00\x00\x00'),
@@ -267,12 +281,11 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         ]
         if self.async_test:
             self.skipTest("Async SDO block upload not implemented yet")
-        else:
-            with self.network[2].sdo[0x1008].open('r', block_transfer=True) as fp:
-                data = fp.read()
+        with self.network[2].sdo[0x1008].open('r', block_transfer=True) as fp:
+            data = fp.read()
         self.assertEqual(data, 'Tiny Node - Mega Domains !')
 
-    async def test_sdo_block_upload_retransmit(self):
+    def test_sdo_block_upload_retransmit(self):
         """Trigger a retransmit by only validating a block partially."""
         self.data = [
             (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),
@@ -575,12 +588,11 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         ]
         if self.async_test:
             self.skipTest("Async SDO block upload not implemented yet")
-        else:
-            with self.network[2].sdo[0x1008].open('r', block_transfer=True) as fp:
-                data = fp.read()
+        with self.network[2].sdo[0x1008].open('r', block_transfer=True) as fp:
+            data = fp.read()
         self.assertEqual(data, 39 * 'the crazy fox jumps over the lazy dog\n')
 
-    async def test_writable_file(self):
+    def test_writable_file(self):
         self.data = [
             (TX, b'\x20\x00\x20\x00\x00\x00\x00\x00'),
             (RX, b'\x60\x00\x20\x00\x00\x00\x00\x00'),
@@ -593,14 +605,13 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         ]
         if self.async_test:
             self.skipTest("Async SDO writable file not implemented yet")
-        else:
-            with self.network[2].sdo['Writable string'].open('wb') as fp:
-                fp.write(b'1234')
-                fp.write(b'56789')
-            self.assertTrue(fp.closed)
-            # Write on closed file
-            with self.assertRaises(ValueError):
-                fp.write(b'123')
+        with self.network[2].sdo['Writable string'].open('wb') as fp:
+            fp.write(b'1234')
+            fp.write(b'56789')
+        self.assertTrue(fp.closed)
+        # Write on closed file
+        with self.assertRaises(ValueError):
+            fp.write(b'123')
 
     async def test_abort(self):
         self.data = [
@@ -609,17 +620,17 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
         ]
         if self.async_test:
             with self.assertRaises(canopen.SdoAbortedError) as cm:
-                _ = await self.network[2].sdo[0x1018][1].aget_raw()
+                _ = await self.network[2].sdo[0x1018][1]
         else:
             with self.assertRaises(canopen.SdoAbortedError) as cm:
                 _ = self.network[2].sdo[0x1018][1].raw
         self.assertEqual(cm.exception.code, 0x06090011)
 
-    async def test_add_sdo_channel(self):
+    def test_add_sdo_channel(self):
         client = self.network[2].add_sdo(0x123456, 0x234567)
         self.assertIn(client, self.network[2].sdo_channels)
 
-    async def test_async_protection(self):
+    def test_async_protection(self):
         self.data = [
             (TX, b'\x40\x18\x10\x01\x00\x00\x00\x00'),
             (RX, b'\x43\x18\x10\x01\x04\x00\x00\x00')
@@ -629,7 +640,8 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(RuntimeError):
                 _ = self.network[2].sdo[0x1018][1].raw
         else:
-            self.skipTest("No async protection test needed in sync mode")
+            # Working fine in sync mode
+            _ = self.network[2].sdo[0x1018][1].raw
 
 
 class TestSDOSync(TestSDO):
@@ -644,11 +656,9 @@ class TestSDOAsync(TestSDO):
     async_test = True
 
 
-class TestSDOClientDatatypes(unittest.IsolatedAsyncioTestCase):
+class TestSDOClientDatatypes(DualSyncAsyncTestCase):
     """Test the SDO client uploads with the different data types in CANopen."""
-
     __test__ = False  # This is a base class, tests should not be run directly.
-    async_test: bool
 
     def _send_message(self, can_id, data, remote=False):
         """Will be used instead of the usual Network.send_message method.
@@ -664,15 +674,12 @@ class TestSDOClientDatatypes(unittest.IsolatedAsyncioTestCase):
             self.network.notify(0x582, self.data.pop(0)[1], 0.0)
 
     def setUp(self):
-        loop = None
-        if self.async_test:
-            loop = asyncio.get_event_loop()
+        super().setUp()
 
-        network = canopen.Network(loop=loop)
+        network = canopen.Network(loop=self.loop)
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.send_message = self._send_message
-        with AllowBlocking():
-            node = network.add_node(2, DATATYPES_EDS)
+        node = network.add_node(2, DATATYPES_EDS)
         node.sdo.RESPONSE_TIMEOUT = 0.01
         self.node = node
         self.network = network

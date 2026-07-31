@@ -66,15 +66,3 @@ def ensure_not_async(fn=None, error_message=None):
     if fn is not None:
         return decorator(fn)
     return decorator
-
-
-class AllowBlocking:
-    """ Context manager to pause async guard """
-
-    def __enter__(self):
-        self._enabled = is_async_guarded()
-        enable_async_guard(False)
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        enable_async_guard(self._enabled)
