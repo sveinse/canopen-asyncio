@@ -738,11 +738,6 @@ class PdoVariable(variable.Variable):
 
         return data
 
-    async def aget_data(self) -> bytes:
-        # Since get_data() is not making any IO, it can be called
-        # directly with no special async variant
-        return self.get_data()
-
     def set_data(self, data: bytes):
         """Set for the given variable the PDO data.
 
@@ -776,10 +771,11 @@ class PdoVariable(variable.Variable):
 
         self.pdo_parent.update()
 
+    async def aget_data(self) -> bytes:
+        raise RuntimeError("Read of PDO data asynchronously is not supported, use regular access")
+
     async def aset_data(self, data: bytes):
-        # Since get_data() is not making any IO, it can be called
-        # directly with no special async variant
-        return self.set_data(data)
+        raise RuntimeError("Writing PDO data asynchronously is not supported, use regular access")
 
 
 # For compatibility

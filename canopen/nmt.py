@@ -242,12 +242,23 @@ class NmtSlave(NmtBase):
         # The heartbeat service should start on the transition
         # between INITIALIZING and PRE-OPERATIONAL state
         if old_state == 0 and self._state == 127:
-            # FIXME: Document why this was fixed
-            if self._heartbeat_time_ms == 0:
-                heartbeat_time_ms = self._local_node.sdo[0x1017].raw
+            if self.network.is_async:
+                # In async mode we cannot read the heartbeat directly, so we
+                # create a task to read it asynchronously and start the heartbeat
+                # service when the read is complete.
+                async def start_heartbeat_async():
+                    try:
+                        heartbeat_time_ms = await self._local_node.sdo[0x1017].aread()
+                        self.start_heartbeat(heartbeat_time_ms)
+                    except KeyError:
+                        pass
+                self.network.create_task(start_heartbeat_async())
             else:
-                heartbeat_time_ms = self._heartbeat_time_ms
-            self.start_heartbeat(heartbeat_time_ms)
+                try:
+                    heartbeat_time_ms = self._local_node.sdo[0x1017].raw
+                    self.start_heartbeat(heartbeat_time_ms)
+                except KeyError:
+                    pass
         else:
             self.update_heartbeat()
 

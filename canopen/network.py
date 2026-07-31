@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from collections.abc import Iterator, MutableMapping
+from collections.abc import Coroutine, Iterator, MutableMapping
 from typing import Callable, Final, Optional, Union
+import sys
 
 import can
 
@@ -17,6 +18,12 @@ from canopen.objectdictionary.eds import import_from_node
 from canopen.sync import SyncProducer
 from canopen.timestamp import TimeProducer
 
+# Use backported TaskGroup for Python < 3.13, as asyncio.TaskGroup was added in 3.11
+if sys.version_info < (3, 11):
+    from taskgroup import TaskGroup
+else:
+    from asyncio import TaskGroup
+
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,7 @@ class Network(MutableMapping):
 
     NOTIFIER_CYCLE: float = 1.0  #: Maximum waiting time for one notifier iteration.
     NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
+    FILTER_ERRORS: bool = True  #: If True, exceptions in callbacks will be logged only
 
     def __init__(self, bus: Optional[can.BusABC] = None,
                  notifier: Optional[can.Notifier] = None,
@@ -40,7 +48,6 @@ class Network(MutableMapping):
         #: :meth:`canopen.Network.connect` is called
         self.bus = bus
         self.loop = loop
-        self._futures: set[asyncio.Future] = set()
         #: A :class:`~canopen.network.NodeScanner` for detecting nodes
         self.scanner = NodeScanner(self)
         #: List of :class:`can.Listener` objects.
@@ -50,6 +57,8 @@ class Network(MutableMapping):
         self.nodes: dict[int, Union[RemoteNode, LocalNode]] = {}
         self.subscribers: dict[int, list[Callback]] = {}
         self.send_lock = threading.Lock()
+        self.taskgroup: TaskGroup = TaskGroup()
+        self.thread_id: int = threading.get_ident()
         self.sync = SyncProducer(self)
         self.time = TimeProducer(self)
         self.nmt = NmtMaster(0)
@@ -114,9 +123,14 @@ class Network(MutableMapping):
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
         if self.notifier is None:
-            self.notifier = can.Notifier(self.bus, [], self.NOTIFIER_CYCLE)
-        for listener in self.listeners:
-            self.notifier.add_listener(listener)
+            # The notifier is started without setting the loop paramter, even
+            # when running in async mode. The notifier changes in sublte ways
+            # when the loop parameter is set. All callbacks via the Listener
+            # interface will be called from the separate rx thread, which is
+            # what canopen is designed for. The async mode of the notifier will
+            # send all callbacks to the event loop thread, which is not
+            # compatible with the blocking locks and queues used in canopen.
+            self.notifier = can.Notifier(self.bus, self.listeners, self.NOTIFIER_CYCLE)
         return self
 
     def disconnect(self) -> None:
@@ -145,15 +159,49 @@ class Network(MutableMapping):
         self.disconnect()
 
     async def __aenter__(self):
-        # FIXME: When TaskGroup are available, we should use them to manage the
-        # tasks. The user must use the `async with` statement with the Network
-        # to ensure its created.
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
+        self.thread_id = threading.get_ident()
+        await self.taskgroup.__aenter__()
         return self
 
     async def __aexit__(self, type, value, traceback):
+        await self.taskgroup.__aexit__(None, None, None)
         self.disconnect()
 
-    async def enable_async_guard(self, enable: bool = True) -> None:
+    @property
+    def is_async(self) -> bool:
+        """Check if canopen has been connected with async"""
+        return self.loop is not None
+
+    def create_task(self, coro: Coroutine, *args, **kwarge) -> asyncio.Task:
+        """Create an async task.
+
+        This function is thread-safe and can be called from any thread. If
+        called from the same thread as the event loop, it will use
+        :code:`asyncio.create_task()` directly. If called from a different
+        thread, it will use :code:`asyncio.run_coroutine_threadsafe()` to
+        schedule the task in the event loop.
+
+        :param coro:
+            The coroutine to run in the event loop.
+        """
+
+        if threading.get_ident() == self.thread_id:
+            # If we are running in the same thread as the event loop
+            # asyncio.create_task() can be used directly.
+            return self.taskgroup.create_task(coro, *args, **kwarge)
+
+        else:
+            async def _create_task():
+                return self.taskgroup.create_task(coro, *args, **kwarge)
+            # The .result() will block until the task is created in
+            # the event loop and return the task object.
+            future = asyncio.run_coroutine_threadsafe(_create_task(), self.loop)
+            return future.result()
+
+    @staticmethod
+    async def enable_async_guard(enable: bool = True) -> None:
         """Enable or disable the async guard for this network.
 
         This makes sure that all functions that are decorated with
@@ -186,6 +234,19 @@ class Network(MutableMapping):
         :param upload_eds:
             Set ``True`` if EDS file should be uploaded from 0x1021.
 
+            .. note::
+                Using this option will fail in async mode, since uploading the
+                EDS requires blocking SDO transfers during node setup. Use a
+                pre-fetched ``object_dictionary`` instead when running under
+                asyncio.
+
+            Example of pre-fetching the object dictionary with async:
+
+            .. code-block:: python
+
+                od = await aimport_from_node(node_id, network)
+                node = network.add_node(node_id, od)
+
         :return:
             The Node object that was added.
         """
@@ -196,20 +257,6 @@ class Network(MutableMapping):
             node = RemoteNode(node, object_dictionary)
         self[node.id] = node
         return node
-
-    async def aadd_node(
-        self,
-        node: Union[int, RemoteNode, LocalNode],
-        object_dictionary: Union[str, ObjectDictionary, None] = None,
-        upload_eds: bool = False,
-    ) -> RemoteNode:
-        """Add a remote node to the network, async variant.
-
-        See add_node() for description
-        """
-        # The async variant exists because import_from_node might block
-        return await asyncio.to_thread(self.add_node, node,
-                                       object_dictionary, upload_eds)
 
     def create_node(
         self,
@@ -296,40 +343,54 @@ class Network(MutableMapping):
             self.dispatch_callbacks(self.subscribers[can_id], can_id, data, timestamp)
         self.scanner.on_message_received(can_id)
 
-    def on_error(self, exc: BaseException) -> None:
-        """This method is called to handle any exception in the callbacks."""
+    def on_error(self, exc: BaseException, ignore_errors: Optional[bool] = None) -> None:
+        """Handle any exception in the callbacks.
 
-        # Exceptions in any callbaks should not affect CAN processing
+        With self.FILTER_ERRORS set to True, exceptions in callbacks will be logged
+        only, and the program will continue running. This is useful for
+        production systems where you want to log errors but not crash the
+        entire application due to a single callback failure.
+
+        With self.FILTER_ERRORS set to False, exceptions in callbacks will be raised,
+        which will stop the program. This is useful for development and debugging,
+        where you want to catch errors early and fix them. This is also
+        important for unit tests, as only logging errors may hide problems.
+
+        :param exc:
+            The exception that was raised.
+        :param ignore_errors:
+            If True, exceptions in callbacks will be logged only, and the program
+            will continue running. If False, exceptions in callbacks will be raised,
+            which will stop the program. If None, the value of self.FILTER_ERRORS
+        """
         logger.exception("Exception in callback: %s", exc_info=exc)
 
-    def dispatch_callbacks(self, callbacks: list[Callback], *args) -> None:
+        if ignore_errors is None:
+            ignore_errors = self.FILTER_ERRORS
+        if not ignore_errors:
+            raise exc
+
+    def dispatch_callbacks(self, callbacks: list[Callable], *args, **kwargs) -> None:
         """Dispatch a list of callbacks with the given arguments.
 
         :param callbacks:
             List of callbacks to call
         :param args:
             Arguments to pass to the callbacks
+        :param kwargs:
+            Keyword arguments to pass to the callbacks. The "ignore_errors"
+            keyword argument can be used to override the default error handling
+            behavior for this specific call. See :meth:`canopen.Network.on_error`
+            for details.
         """
-        def task_done(future: asyncio.Future) -> None:
-            """Callback to be called when a task is done."""
-            self._futures.discard(future)
-            try:
-                if (exc := future.exception()) is not None:
-                    self.on_error(exc)
-            except (asyncio.CancelledError, asyncio.InvalidStateError) as exc:
-                # Handle cancelled tasks and unfinished tasks gracefully
-                self.on_error(exc)
-
-        # Run the callbacks
+        ignore_errors = kwargs.pop("ignore_errors", None)
         for callback in callbacks:
-            result = callback(*args)
-            if result is not None and self.loop is not None and asyncio.iscoroutine(result):
-                # This function may be called from the rx thread, so it must
-                # be thread-safe. We cannot use asyncio.create_task() here, since
-                # it is not thread-safe.
-                task = asyncio.run_coroutine_threadsafe(result, self.loop)
-                self._futures.add(task)
-                task.add_done_callback(task_done)
+            try:
+                result = callback(*args, **kwargs)
+                if result is not None and asyncio.iscoroutine(result):
+                    self.create_task(result)
+            except Exception as e:
+                self.on_error(e, ignore_errors)
 
     def check(self) -> None:
         """Check that no fatal error has occurred in the receiving thread.
@@ -342,11 +403,6 @@ class Network(MutableMapping):
             if exc is not None:
                 logger.error("An error has caused receiving of messages to stop")
                 raise exc
-
-    @property
-    def is_async(self) -> bool:
-        """Check if canopen has been connected with async"""
-        return self.loop is not None
 
     def __getitem__(self, node_id: int) -> Union[RemoteNode, LocalNode]:
         return self.nodes[node_id]

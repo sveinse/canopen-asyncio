@@ -205,6 +205,7 @@ def import_from_node(node_id: int, network: canopen.network.Network):
     network.subscribe(0x580 + node_id, sdo_client.on_response)
     # Create file like object for Store EDS variable
     try:
+        # Opening an SDO channel with file-like object is not supported in async
         with sdo_client.open(0x1021, 0, "rt") as eds_fp:
             od = import_eds(eds_fp, node_id)
     except Exception as e:

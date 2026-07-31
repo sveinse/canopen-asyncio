@@ -42,7 +42,7 @@ class EmcyConsumer:
             self.emcy_received.notify_all()
 
         # Call all registered callbacks
-        self.network.dispatch_callbacks(self.callbacks, entry)
+        self.network.dispatch_callbacks(self.callbacks, entry, ignore_errors=True)
 
     def add_callback(self, callback: Callable[[EmcyError], None]):
         """Get notified on EMCY messages from this node.
@@ -89,7 +89,7 @@ class EmcyConsumer:
 
     async def async_wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
-    ) -> EmcyError:
+    ) -> Optional[EmcyError]:
         """Wait for a new EMCY to arrive.
 
         :param emcy_code: EMCY code to wait for

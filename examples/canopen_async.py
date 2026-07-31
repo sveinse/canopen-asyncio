@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 async def do_loop(network: canopen.Network, nodeid):
 
     # Create the node object and load the OD
-    node: canopen.RemoteNode = await network.aadd_node(nodeid, 'eds/e35.eds')
+    node: canopen.RemoteNode = await network.add_node(nodeid, 'eds/e35.eds')
 
     # Get the PDOs from the remote
     await node.tpdo.aread(from_od=False)
@@ -48,18 +48,13 @@ async def do_loop(network: canopen.Network, nodeid):
 async def amain():
 
     # Create the canopen network and connect it to the CAN bus
-    loop = asyncio.get_running_loop()
-    async with canopen.Network(loop=loop).connect(
+    async with canopen.Network().connect(
         interface='virtual', bitrate=1000000, receive_own_messages=True
     ) as network:
 
         # Start two instances and run them concurrently
-        # NOTE: It is better to use asyncio.TaskGroup to manage tasks, but this
-        # is not available before Python 3.11.
-        await asyncio.gather(
-            asyncio.create_task(do_loop(network, 20)),
-            asyncio.create_task(do_loop(network, 21)),
-        )
+        network.create_task(do_loop(network, 20))
+        network.create_task(do_loop(network, 21))
 
 
 def main():

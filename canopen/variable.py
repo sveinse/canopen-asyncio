@@ -5,7 +5,7 @@ from collections.abc import Collection, Mapping
 from typing import Union
 
 from canopen import objectdictionary
-from canopen.utils import is_not_running_async, pretty_index
+from canopen.utils import is_running_async, pretty_index
 
 
 logger = logging.getLogger(__name__)
@@ -251,8 +251,13 @@ class Bits(Mapping):
     def __init__(self, variable: Variable):
         assert variable.od.data_type in objectdictionary.datatypes.INTEGER_TYPES
         self.variable = variable
-        if is_not_running_async():
+        self._is_not_running_async = not is_running_async()
+
+        # To remain backwards compatible, read immediately if not running in
+        # an async context.
+        if self._is_not_running_async:
             self.read()
+
         self.raw: int
 
     @staticmethod
@@ -272,7 +277,10 @@ class Bits(Mapping):
     def __setitem__(self, key: Union[slice, int, str, Collection[int]], value: int):
         self.raw = self.variable.od.encode_bits(
             self.raw, self._get_bits(key), value)
-        if is_not_running_async():
+
+        # To remain backwards compatible, write immediately if not running in
+        # an async context.
+        if self._is_not_running_async:
             self.write()
 
     def __iter__(self):

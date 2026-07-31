@@ -171,6 +171,8 @@ class SdoArray(Mapping):
         return await self[0].aread()  # type: ignore[return-value]
 
     def __contains__(self, subindex: object) -> bool:
+        if not isinstance(subindex, int):
+            return False
         return 0 <= subindex <= len(self)
 
 
@@ -181,9 +183,8 @@ class SdoVariable(variable.Variable):
         self.sdo_node = sdo_node
         variable.Variable.__init__(self, od)
 
-    @ensure_not_async("Use aget_data() instead")
-    def get_data(self) -> bytes:
-        data = self.sdo_node.upload(self.od.index, self.od.subindex)
+    def _truncate_data(self, data: bytes) -> bytes:
+        """Truncate data to the size specified in the object dictionary."""
         response_size = len(data)
 
         # If size is available through variable in OD, then use the smaller of the two sizes.
@@ -196,8 +197,14 @@ class SdoVariable(variable.Variable):
                 data = data[:var_size]
         return data
 
+    @ensure_not_async("Use aget_data() instead")
+    def get_data(self) -> bytes:
+        data = self.sdo_node.upload(self.od.index, self.od.subindex)
+        return self._truncate_data(data)
+
     async def aget_data(self) -> bytes:
-        return await self.sdo_node.aupload(self.od.index, self.od.subindex)
+        data = await self.sdo_node.aupload(self.od.index, self.od.subindex)
+        return self._truncate_data(data)
 
     @ensure_not_async("Use aset_data() instead")
     def set_data(self, data: bytes):
