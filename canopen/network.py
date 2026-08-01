@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
-from collections.abc import Iterator, MutableMapping
+from collections.abc import Coroutine, Iterator, MutableMapping
+from contextlib import AsyncExitStack
 from typing import Callable, Final, Optional, Union
+import sys
 
 import can
 
@@ -14,6 +17,12 @@ from canopen.objectdictionary import ObjectDictionary
 from canopen.objectdictionary.eds import import_from_node
 from canopen.sync import SyncProducer
 from canopen.timestamp import TimeProducer
+
+# Use backported TaskGroup for Python < 3.11, as asyncio.TaskGroup was added in 3.11
+if sys.version_info < (3, 11):
+    from taskgroup import TaskGroup
+else:
+    from asyncio import TaskGroup
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +35,7 @@ class Network(MutableMapping):
 
     NOTIFIER_CYCLE: float = 1.0  #: Maximum waiting time for one notifier iteration.
     NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
+    FILTER_ERRORS: bool = True  #: If True, exceptions in callbacks will be logged only
 
     def __init__(self, bus: Optional[can.BusABC] = None):
         """
@@ -44,6 +54,15 @@ class Network(MutableMapping):
         self.nodes: dict[int, Union[RemoteNode, LocalNode]] = {}
         self.subscribers: dict[int, list[Callback]] = {}
         self.send_lock = threading.Lock()
+        #: A task group for managing async tasks. This is used to ensure that
+        #: all tasks are properly cleaned up when the network is closed.
+        self.taskgroup: TaskGroup = TaskGroup()
+        self.thread_id: int = threading.get_ident()
+        #: An async exit stack for managing async context managers. This is used
+        #: to ensure that all context managers are properly cleaned up when the
+        #: network is closed.
+        self.exit_stack: AsyncExitStack = AsyncExitStack()
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.sync = SyncProducer(self)
         self.time = TimeProducer(self)
         self.nmt = NmtMaster(0)
@@ -108,6 +127,13 @@ class Network(MutableMapping):
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
         if self.notifier is None:
+            # The notifier is started without setting the loop paramter, even
+            # when running in async mode. The notifier changes in sublte ways
+            # when the loop parameter is set. All callbacks via the Listener
+            # interface will be called from the separate rx thread, which is
+            # what canopen is designed for. The async mode of the notifier will
+            # send all callbacks to the event loop thread, which is not
+            # compatible with the blocking locks and queues used in canopen.
             self.notifier = can.Notifier(self.bus, self.listeners, self.NOTIFIER_CYCLE)
         return self
 
@@ -135,6 +161,65 @@ class Network(MutableMapping):
 
     def __exit__(self, type, value, traceback):
         self.disconnect()
+
+    async def __aenter__(self):
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
+        else:
+            if self.loop != asyncio.get_running_loop():
+                raise RuntimeError("Network is running in a different event loop")
+        self.thread_id = threading.get_ident()
+        try:
+            # Enter the async context for the taskgroup and leave it last
+            await self.exit_stack.enter_async_context(self.taskgroup)
+            # Cleanup the network
+            self.exit_stack.callback(self.disconnect)
+        except Exception:
+            await self.exit_stack.aclose()
+            raise
+        return self
+
+    async def __aexit__(self, type, value, traceback):
+        # Cleanup by running the context managers in reverse order of entry.
+        # Please see __aenter__ for list of contexts.
+        return await self.exit_stack.__aexit__(type, value, traceback)
+
+    @property
+    def is_running_async(self) -> bool:
+        """Check if canopen has been connected with async"""
+        return self.loop is not None
+
+    def create_task(self, coro: Coroutine, *args, **kwarge) -> asyncio.Task:
+        """Create an async task.
+
+        This function is thread-safe and can be called from any thread. If
+        called from the same thread as the event loop, it will use
+        :code:`asyncio.create_task()` directly. If called from a different
+        thread, it will use :code:`asyncio.run_coroutine_threadsafe()` to
+        schedule the task in the event loop.
+
+        All tasks created with this function is managed by the task group
+        in :attr:`canopen.Network.taskgroup`, which takes care of cleaning up
+        the tasks when the network is closed and handles exceptions in the tasks.
+
+        :param coro:
+            The coroutine to run in the event loop.
+        """
+        if threading.get_ident() == self.thread_id:
+            # If we are running in the same thread as the event loop
+            # asyncio.create_task() can be used directly.
+            return self.taskgroup.create_task(coro, *args, **kwarge)
+
+        else:
+            # Running in a different thread.
+            async def _create_task():
+                return self.taskgroup.create_task(coro, *args, **kwarge)
+            # Since this is another thread asyncio.get_running_loop() will
+            # not work. We need to use the stored event loop.
+            future = asyncio.run_coroutine_threadsafe(_create_task(), self.loop)
+            # The result() will block until the _create_task() coroutine has
+            # been executed and it returns the actual task object.
+            return future.result()
 
     def add_node(
         self,
@@ -247,10 +332,57 @@ class Network(MutableMapping):
             Timestamp of the message, preferably as a Unix timestamp
         """
         if can_id in self.subscribers:
-            callbacks = self.subscribers[can_id]
-            for callback in callbacks:
-                callback(can_id, data, timestamp)
+            self.dispatch_callbacks(self.subscribers[can_id], can_id, data, timestamp)
         self.scanner.on_message_received(can_id)
+
+    def on_error(self, exc: BaseException, ignore_errors: Optional[bool] = None) -> None:
+        """Handle any exception in the callbacks.
+
+        With self.FILTER_ERRORS set to True, exceptions in callbacks will be logged
+        only, and the program will continue running. This is useful for
+        production systems where you want to log errors but not crash the
+        entire application due to a single callback failure.
+
+        With self.FILTER_ERRORS set to False, exceptions in callbacks will be raised,
+        which will stop the program. This is useful for development and debugging,
+        where you want to catch errors early and fix them. This is also
+        important for unit tests, as only logging errors may hide problems.
+
+        :param exc:
+            The exception that was raised.
+        :param ignore_errors:
+            If True, exceptions in callbacks will be logged only, and the program
+            will continue running. If False, exceptions in callbacks will be raised,
+            which will stop the program. If None, the value of self.FILTER_ERRORS
+        """
+        logger.exception("Exception in callback: %s", exc_info=exc)
+
+        if ignore_errors is None:
+            ignore_errors = self.FILTER_ERRORS
+        if not ignore_errors:
+            raise exc
+
+    def dispatch_callbacks(self, callbacks: list[Callable], *args, **kwargs) -> None:
+        """Dispatch a list of callbacks with the given arguments.
+
+        :param callbacks:
+            List of callbacks to call
+        :param args:
+            Arguments to pass to the callbacks
+        :param kwargs:
+            Keyword arguments to pass to the callbacks. The "ignore_errors"
+            keyword argument can be used to override the default error handling
+            behavior for this specific call. See :meth:`canopen.Network.on_error`
+            for details.
+        """
+        ignore_errors = kwargs.pop("ignore_errors", None)
+        for callback in callbacks:
+            try:
+                result = callback(*args, **kwargs)
+                if result is not None and asyncio.iscoroutine(result):
+                    self.create_task(result)
+            except Exception as e:
+                self.on_error(e, ignore_errors)
 
     def check(self) -> None:
         """Check that no fatal error has occurred in the receiving thread.
@@ -374,7 +506,7 @@ class MessageListener(can.Listener):
             self.network.notify(msg.arbitration_id, msg.data, msg.timestamp)
         except Exception as e:
             # Exceptions in any callbaks should not affect CAN processing
-            logger.error(str(e))
+            self.network.on_error(e)
 
     def stop(self) -> None:
         """Override abstract base method to release any resources."""

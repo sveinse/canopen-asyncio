@@ -14,6 +14,7 @@ class TestNetwork(unittest.TestCase):
     def setUp(self):
         self.network = canopen.Network()
         self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.addCleanup(self.network.disconnect)
 
     def test_network_add_node(self):
         # Add using str.
