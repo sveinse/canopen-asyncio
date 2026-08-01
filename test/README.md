@@ -71,16 +71,36 @@ class TestEmcyAsync(TestEmcy):
     async_test = True  # In async mode
 ```
 
-Note that there is no internal difference between the `Sync` and `Async` runs
-except for the changes in `self.async_test` and `self.loop`. It is the
-responsibility of the tests to setup the unit test with and without async.
+This results in two sets of the same tests, `TestEmcySync`, where async is not
+enabled and `TestEmcyAsync` where async is enabled.
+
+There is nothing special about these two runs, except the value of
+`self.async_test` and `self.loop`. 
+
+```python
+    async def test_method(self):
+        if self.async_test:
+            # This is when async is enabled.
+            await some_async_command()
+        else:
+            # This is when async is not running
+            some_regular_command()
+```
+
+What the sync and async does, is run this test function twice, once with
+`self.async_test` False and then a second time with `self.async_test` True.
+It is the resposibility of the unittests to decide if there is a need to
+differentiate the test flow between the two run.
 
 
 ### Setting up a Network instance in async
 
-When setting up a `Network()` instance in async, it is important that its async
-context is entered. If `setUp()` contains `self.network = Network(loop=self.loop)`
-then the following can be added:
+`Network()` is the main component that have difference between usage in sync
+and async mode. To use network proper in async, it's async context must be
+entered in the test.
+
+Say that `setUp()` contains `self.network = Network()` then the following can
+be added to enter and exits its async context:
 
 ```python
     async def asyncSetUp(self):
@@ -91,6 +111,15 @@ then the following can be added:
         if self.async_test:
             await self.network.__aexit__(None, None, None)
 ```
+
+
+### Async or regular test function?
+
+When writing tests, should I use `async def` or just `def`?
+
+If not making any async operations with `async` or `await` there is no need
+to mark the function as `async def`. Note that the function will be run in both
+sync and async mode even if its not a coroutine.
 
 
 ### Excluding async from a test
