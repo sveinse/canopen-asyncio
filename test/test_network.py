@@ -17,7 +17,7 @@ class TestNetwork(DualSyncAsyncTestCase):
     def setUp(self):
         super().setUp()
 
-        self.network = canopen.Network(loop=self.loop)
+        self.network = canopen.Network()
         self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.addCleanup(self.network.disconnect)
 
@@ -436,46 +436,60 @@ class TestScanner(DualSyncAsyncTestCase):
         with self.assertRaisesRegex(RuntimeError, "No actual Network object was assigned"):
             self.scanner.search()
 
-    def test_scanner_search(self):
+    async def test_scanner_search(self):
         rxbus = can.Bus(interface="virtual")
         self.addCleanup(rxbus.shutdown)
 
         txbus = can.Bus(interface="virtual")
         self.addCleanup(txbus.shutdown)
 
-        net = canopen.Network(txbus, loop=self.loop)
+        net = canopen.Network(txbus)
         net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         net.connect()
-        self.addCleanup(net.disconnect)
 
-        self.scanner.network = net
-        self.scanner.search()
+        def _test():
+            self.scanner.network = net
+            self.scanner.search()
 
-        payload = bytes([64, 0, 16, 0, 0, 0, 0, 0])
-        acc = [rxbus.recv(self.TIMEOUT) for _ in range(127)]
-        for node_id, msg in enumerate(acc, start=1):
-            with self.subTest(node_id=node_id):
-                self.assertIsNotNone(msg)
-                self.assertEqual(msg.arbitration_id, 0x600 + node_id)
-                self.assertEqual(msg.data, payload)
-        # Check that no spurious packets were sent.
-        self.assertIsNone(rxbus.recv(self.TIMEOUT))
+            payload = bytes([64, 0, 16, 0, 0, 0, 0, 0])
+            acc = [rxbus.recv(self.TIMEOUT) for _ in range(127)]
+            for node_id, msg in enumerate(acc, start=1):
+                with self.subTest(node_id=node_id):
+                    self.assertIsNotNone(msg)
+                    self.assertEqual(msg.arbitration_id, 0x600 + node_id)
+                    self.assertEqual(msg.data, payload)
+            # Check that no spurious packets were sent.
+            self.assertIsNone(rxbus.recv(self.TIMEOUT))
 
-    def test_scanner_search_limit(self):
+        if self.async_test:
+            async with net:  # Run tests with async
+                _test()
+        else:
+            with net:  # Run tests with sync
+                _test()
+
+    async def test_scanner_search_limit(self):
         bus = can.Bus(interface="virtual", receive_own_messages=True)
-        net = canopen.Network(bus, loop=self.loop)
+        net = canopen.Network(bus)
         net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         net.connect()
-        self.addCleanup(net.disconnect)
 
-        self.scanner.network = net
-        self.scanner.search(limit=1)
+        def _test():
+            self.scanner.network = net
+            self.scanner.search(limit=1)
 
-        msg = bus.recv(self.TIMEOUT)
-        self.assertIsNotNone(msg)
-        self.assertEqual(msg.arbitration_id, 0x601)
-        # Check that no spurious packets were sent.
-        self.assertIsNone(bus.recv(self.TIMEOUT))
+            msg = bus.recv(self.TIMEOUT)
+            self.assertIsNotNone(msg)
+            self.assertEqual(msg.arbitration_id, 0x601)
+            # Check that no spurious packets were sent.
+            self.assertIsNone(bus.recv(self.TIMEOUT))
+
+        if self.async_test:
+            async with net:  # Run tests with async
+                _test()
+        else:
+            with net:  # Run tests with sync
+                _test()
 
 
 class TestScannerSync(TestScanner):

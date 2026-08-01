@@ -251,6 +251,10 @@ class Bits(Mapping):
     def __init__(self, variable: Variable):
         assert variable.od.data_type in objectdictionary.datatypes.INTEGER_TYPES
         self.variable = variable
+
+        # There is a slight caveat here: is_running_async() indicates that there
+        # is a running event loop in the current thread, but it does not tell us
+        # if the canopen.Network instance is running in async mode.
         self._is_not_running_async = not is_running_async()
 
         # To remain backwards compatible, read immediately if not running in

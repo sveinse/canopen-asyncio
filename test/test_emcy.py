@@ -31,7 +31,7 @@ class TestEmcy(DualSyncAsyncTestCase):
     def setUp(self):
         super().setUp()
 
-        self.net = canopen.Network(loop=self.loop)
+        self.net = canopen.Network()
         self.net.connect(interface="virtual")
         self.net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.emcy = canopen.emcy.EmcyConsumer()
@@ -313,7 +313,7 @@ class TestEmcyProducer(DualSyncAsyncTestCase):
 
         self.txbus = can.Bus(interface="virtual")
         self.rxbus = can.Bus(interface="virtual")
-        self.net = canopen.Network(self.txbus, loop=self.loop)
+        self.net = canopen.Network(self.txbus)
         self.net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.net.connect()
         self.emcy = canopen.emcy.EmcyProducer(0x80 + 1)

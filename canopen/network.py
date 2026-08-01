@@ -4,12 +4,13 @@ import asyncio
 import logging
 import threading
 from collections.abc import Coroutine, Iterator, MutableMapping
+from contextlib import AsyncExitStack
 from typing import Callable, Final, Optional, Union
 import sys
 
 import can
 
-from canopen.async_guard import is_async_guarded, enable_async_guard
+from canopen.async_guard import is_async_guarded
 from canopen.lss import LssMaster
 from canopen.nmt import NmtMaster
 from canopen.node import LocalNode, RemoteNode
@@ -18,7 +19,7 @@ from canopen.objectdictionary.eds import import_from_node
 from canopen.sync import SyncProducer
 from canopen.timestamp import TimeProducer
 
-# Use backported TaskGroup for Python < 3.13, as asyncio.TaskGroup was added in 3.11
+# Use backported TaskGroup for Python < 3.11, as asyncio.TaskGroup was added in 3.11
 if sys.version_info < (3, 11):
     from taskgroup import TaskGroup
 else:
@@ -37,9 +38,7 @@ class Network(MutableMapping):
     NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
     FILTER_ERRORS: bool = True  #: If True, exceptions in callbacks will be logged only
 
-    def __init__(self, bus: Optional[can.BusABC] = None,
-                 notifier: Optional[can.Notifier] = None,
-                 loop: Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self, bus: Optional[can.BusABC] = None):
         """
         :param can.BusABC bus:
             A python-can bus instance to re-use.
@@ -47,18 +46,19 @@ class Network(MutableMapping):
         #: A python-can :class:`can.BusABC` instance which is set after
         #: :meth:`canopen.Network.connect` is called
         self.bus = bus
-        self.loop = loop
         #: A :class:`~canopen.network.NodeScanner` for detecting nodes
         self.scanner = NodeScanner(self)
         #: List of :class:`can.Listener` objects.
         #: Includes at least MessageListener.
         self.listeners: list[can.Listener] = [MessageListener(self)]
-        self.notifier: Optional[can.Notifier] = notifier
+        self.notifier: Optional[can.Notifier] = None
         self.nodes: dict[int, Union[RemoteNode, LocalNode]] = {}
         self.subscribers: dict[int, list[Callback]] = {}
         self.send_lock = threading.Lock()
         self.taskgroup: TaskGroup = TaskGroup()
         self.thread_id: int = threading.get_ident()
+        self.exit_stack: AsyncExitStack = AsyncExitStack()
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.sync = SyncProducer(self)
         self.time = TimeProducer(self)
         self.nmt = NmtMaster(0)
@@ -161,16 +161,27 @@ class Network(MutableMapping):
     async def __aenter__(self):
         if self.loop is None:
             self.loop = asyncio.get_running_loop()
+        else:
+            if self.loop != asyncio.get_running_loop():
+                raise RuntimeError("Network is running in a different event loop")
         self.thread_id = threading.get_ident()
-        await self.taskgroup.__aenter__()
+        try:
+            # Enter the async context for the taskgroup and leave it last
+            await self.exit_stack.enter_async_context(self.taskgroup)
+            # Cleanup the network
+            self.exit_stack.callback(self.disconnect)
+        except Exception:
+            await self.exit_stack.aclose()
+            raise
         return self
 
     async def __aexit__(self, type, value, traceback):
-        await self.taskgroup.__aexit__(None, None, None)
-        self.disconnect()
+        # Cleanup by running the context managers in reverse order of entry.
+        # Please see __aenter__ for list of contexts.
+        return await self.exit_stack.__aexit__(type, value, traceback)
 
     @property
-    def is_async(self) -> bool:
+    def is_running_async(self) -> bool:
         """Check if canopen has been connected with async"""
         return self.loop is not None
 
@@ -186,35 +197,21 @@ class Network(MutableMapping):
         :param coro:
             The coroutine to run in the event loop.
         """
-
         if threading.get_ident() == self.thread_id:
             # If we are running in the same thread as the event loop
             # asyncio.create_task() can be used directly.
             return self.taskgroup.create_task(coro, *args, **kwarge)
 
         else:
+            # Running in a different thread.
             async def _create_task():
                 return self.taskgroup.create_task(coro, *args, **kwarge)
-            # The .result() will block until the task is created in
-            # the event loop and return the task object.
+            # Since this is another thread asyncio.get_running_loop() will
+            # not work. We need to use the stored event loop.
             future = asyncio.run_coroutine_threadsafe(_create_task(), self.loop)
+            # The result() will block until the _create_task() coroutine has
+            # been executed and it returns the actual task object.
             return future.result()
-
-    @staticmethod
-    async def enable_async_guard(enable: bool = True) -> None:
-        """Enable or disable the async guard for this network.
-
-        This makes sure that all functions that are decorated with
-        :code:`@ensure_not_async` will raise a RuntimeError if called from the
-        async main thread.
-
-        This function is deliberately async, to ensure that it is called from
-        the async main thread.
-
-        :param enable:
-            If True, enable the async guard. If False, disable it.
-        """
-        enable_async_guard(enable)
 
     def add_node(
         self,

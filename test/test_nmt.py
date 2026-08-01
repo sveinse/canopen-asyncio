@@ -54,7 +54,7 @@ class TestNmtMaster(DualSyncAsyncTestCase):
     def setUp(self):
         super().setUp()
 
-        net = canopen.Network(loop=self.loop)
+        net = canopen.Network()
         net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         net.connect(interface="virtual")
         with self.assertLogs():
@@ -188,13 +188,13 @@ class TestNmtSlave(DualSyncAsyncTestCase):
     def setUp(self):
         super().setUp()
 
-        self.network1 = canopen.Network(loop=self.loop)
+        self.network1 = canopen.Network()
         self.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network1.connect("test", interface="virtual")
         with self.assertLogs():
             self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
 
-        self.network2 = canopen.Network(loop=self.loop)
+        self.network2 = canopen.Network()
         self.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network2.connect("test", interface="virtual")
         with self.assertLogs():

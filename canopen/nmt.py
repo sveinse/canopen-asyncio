@@ -242,7 +242,7 @@ class NmtSlave(NmtBase):
         # The heartbeat service should start on the transition
         # between INITIALIZING and PRE-OPERATIONAL state
         if old_state == 0 and self._state == 127:
-            if self.network.is_async:
+            if self.network.is_running_async:
                 # In async mode we cannot read the heartbeat directly, so we
                 # create a task to read it asynchronously and start the heartbeat
                 # service when the read is complete.

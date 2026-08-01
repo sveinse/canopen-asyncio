@@ -62,7 +62,6 @@ class PdoBase(Mapping):
     def __len__(self):
         return len(self.map)
 
-    @ensure_not_async("Use aread() instead")
     def read(self, from_od=False):
         """Read PDO configuration from node using SDO."""
         for pdo_map in self.map.values():
@@ -73,7 +72,6 @@ class PdoBase(Mapping):
         for pdo_map in self.map.values():
             await pdo_map.aread(from_od=from_od)
 
-    @ensure_not_async("Use asave() instead")
     def save(self):
         """Save PDO configuration to node using SDO."""
         for pdo_map in self.map.values():
@@ -421,7 +419,6 @@ class PdoMap:
 
         self.subscribe()
 
-    @ensure_not_async("Use aread() instead")
     def read(self, from_od=False) -> None:
         """Read PDO configuration for this map.
 
@@ -555,7 +552,6 @@ class PdoMap:
             yield self.com_record[1], cob_id
             self.subscribe()
 
-    @ensure_not_async("Use asave() instead")
     def save(self) -> None:
         """Read PDO configuration for this map using SDO."""
         for sdo, value in self.save_generator():

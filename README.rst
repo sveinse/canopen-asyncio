@@ -36,15 +36,12 @@ Difference between async and non-async version
 
 This port have some differences with the upstream non-async version of canopen.
 
-* The :code:`Network` accepts additional parameters than upstream. It accepts
-  :code:`loop` which selects the mode of operation. If :code:`None` it will
-  run in blocking mode, otherwise it will run in async mode. It supports
-  providing a custom CAN :code:`notifier` if the CAN bus will be shared by
-  multiple protocols.
+* The async use of :code:`Network` must be used in an async context. This is
+  required to setup the async tasks and handles proper cleanup and exception
+  handling.
 
-* The :code:`Network` class can be (and should be) used in an async context
-  manager. This will ensure the network will be automatically disconnected when
-  exiting the context. See the example below.
+      async with canopen.Network().connect() as network:
+          # do async stuff with network
 
 * Most async functions follow an "a" prefix naming scheme.
   E.g. the async variant for :code:`SdoClient.download()` is available
@@ -56,18 +53,18 @@ This port have some differences with the upstream non-async version of canopen.
       var = sdo['Variable'].raw  # synchronous
       sdo['Variable'].raw = 12   # synchronous
 
-      var = await sdo['Variable']       # async
-      await sdo['Variable'].awrite(12)  # async
+      var = await sdo['Variable']          # async
+      var = await sdo['Variable'].aread()  # async (equivalent)
+      await sdo['Variable'].awrite(12)     # async
 
-* Installed :code:`ensure_not_async()` sentinel guard in functions which
-  prevents calling blocking functions in async context. It will raise the
-  exception :code:`RuntimeError` "Calling a blocking function" when this
-  happen. If this is encountered, the code is not using the async variants
-  of the library when it shouldn't.
+* Opt-in :code:`ensure_not_async()` sentinel guard in functions which prevents
+  calling blocking functions in async context. It will raise the exception
+  :code:`RuntimeError` "Calling a blocking function" when this happen. If this
+  is encountered, the code is not using the async variants of the library when
+  it shouldn't.
 
-* The mechanism for CAN bus callbacks have been changed. Callbacks might be
-  async, which means they cannot be called immediately. This affects how
-  error handling is done in the library.
+  To enable it call :code:`canopen.async_guard.enable_async_guard(True)` in
+  your main thread/main loop.
 
 * The callbacks to the message handlers have been changed to be handled by
   :code:`Network.dispatch_callbacks()`. They are no longer called with any
@@ -79,8 +76,6 @@ This port have some differences with the upstream non-async version of canopen.
 * SDO block upload and download is not yet supported in async mode.
 
 * :code:`BaseNode402` does not work with async
-
-* :code:`LssMaster` does not work with async, except :code:`LssMaster.fast_scan()`
 
 * :code:`Bits` is not working differently in async mode. In non-async mode,
   the raw value is read from the node when the :code:`Bits` object is created.

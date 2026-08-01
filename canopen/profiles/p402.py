@@ -2,18 +2,9 @@
 import logging
 import time
 
-from canopen.async_guard import ensure_not_async
 from canopen.node import RemoteNode
 from canopen.pdo import PdoMap
 from canopen.sdo import SdoCommunicationError
-
-"""
-NOTE: Async compatibility
-This file is not async compatible, as it contains numerous setters and getters
-in many of its function. The BaseNode402 class should probably be refactored
-and ported to a design which is async compatible. For now, "ensure_not_async"
-guard is installed in its init function to warn the user not to use it.
-"""
 
 
 logger = logging.getLogger(__name__)
@@ -220,8 +211,6 @@ class BaseNode402(RemoteNode):
     TIMEOUT_CHECK_TPDO = 0.2            # seconds
     TIMEOUT_HOMING_DEFAULT = 30         # seconds
 
-    # As the class is not async compatible, ensure async is not running
-    @ensure_not_async("BaseNode402 is not async compatible")
     def __init__(self, node_id, object_dictionary):
         super(BaseNode402, self).__init__(node_id, object_dictionary)
         self.tpdo_values = {}  # { index: value from last received TPDO }

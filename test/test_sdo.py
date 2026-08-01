@@ -110,7 +110,7 @@ class TestSDO(DualSyncAsyncTestCase):
     def setUp(self):
         super().setUp()
 
-        network = canopen.Network(loop=self.loop)
+        network = canopen.Network()
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.send_message = self._send_message
         node = network.add_node(2, SAMPLE_EDS)
@@ -676,13 +676,21 @@ class TestSDOClientDatatypes(DualSyncAsyncTestCase):
     def setUp(self):
         super().setUp()
 
-        network = canopen.Network(loop=self.loop)
+        network = canopen.Network()
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.send_message = self._send_message
         node = network.add_node(2, DATATYPES_EDS)
         node.sdo.RESPONSE_TIMEOUT = 0.01
         self.node = node
         self.network = network
+
+    async def asyncSetUp(self):
+        if self.async_test:
+            await self.network.__aenter__()
+
+    async def asyncTearDown(self):
+        if self.async_test:
+            await self.network.__aexit__(None, None, None)
 
     def tearDown(self):
         self.network.disconnect()
