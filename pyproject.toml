@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
     "python-can >= 3.0.0",
     "taskgroup; python_version <= '3.13'",
+    "exceptiongroup; python_version <= '3.10'",
 ]
 dynamic = ["version"]
 

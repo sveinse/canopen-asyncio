@@ -18,12 +18,13 @@ from canopen.objectdictionary.eds import import_from_node
 from canopen.sync import SyncProducer
 from canopen.timestamp import TimeProducer
 
-# Use backported TaskGroup for Python < 3.11, as asyncio.TaskGroup was added in 3.11
-if sys.version_info < (3, 11):
-    from taskgroup import TaskGroup
-else:
+# Use backported TaskGroup and ExceptionGroup for Python < 3.11
+if sys.version_info >= (3, 11):
+    from builtins import ExceptionGroup
     from asyncio import TaskGroup
-
+else:
+    from taskgroup import TaskGroup
+    from exceptiongroup import ExceptionGroup
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,9 @@ class Network(MutableMapping):
         #: network is closed.
         self.exit_stack: AsyncExitStack = AsyncExitStack()
         self.loop: Optional[asyncio.AbstractEventLoop] = None
+        #: A list of exceptions that have occurred in callbacks. This is used to
+        #: ensure that exceptions are not lost
+        self.exceptions: list[BaseException] = []
         self.sync = SyncProducer(self)
         self.time = TimeProducer(self)
         self.nmt = NmtMaster(0)
@@ -188,38 +192,6 @@ class Network(MutableMapping):
     def is_running_async(self) -> bool:
         """Check if canopen has been connected with async"""
         return self.loop is not None
-
-    def create_task(self, coro: Coroutine, *args, **kwarge) -> asyncio.Task:
-        """Create an async task.
-
-        This function is thread-safe and can be called from any thread. If
-        called from the same thread as the event loop, it will use
-        :code:`asyncio.create_task()` directly. If called from a different
-        thread, it will use :code:`asyncio.run_coroutine_threadsafe()` to
-        schedule the task in the event loop.
-
-        All tasks created with this function is managed by the task group
-        in :attr:`canopen.Network.taskgroup`, which takes care of cleaning up
-        the tasks when the network is closed and handles exceptions in the tasks.
-
-        :param coro:
-            The coroutine to run in the event loop.
-        """
-        if threading.get_ident() == self.thread_id:
-            # If we are running in the same thread as the event loop
-            # asyncio.create_task() can be used directly.
-            return self.taskgroup.create_task(coro, *args, **kwarge)
-
-        else:
-            # Running in a different thread.
-            async def _create_task():
-                return self.taskgroup.create_task(coro, *args, **kwarge)
-            # Since this is another thread asyncio.get_running_loop() will
-            # not work. We need to use the stored event loop.
-            future = asyncio.run_coroutine_threadsafe(_create_task(), self.loop)
-            # The result() will block until the _create_task() coroutine has
-            # been executed and it returns the actual task object.
-            return future.result()
 
     def add_node(
         self,
@@ -355,12 +327,16 @@ class Network(MutableMapping):
             will continue running. If False, exceptions in callbacks will be raised,
             which will stop the program. If None, the value of self.FILTER_ERRORS
         """
-        logger.exception("Exception in callback: %s", exc_info=exc)
+        logger.exception("Exception in callback", exc_info=exc)
 
-        if ignore_errors is None:
-            ignore_errors = self.FILTER_ERRORS
-        if not ignore_errors:
+        ignore = self.FILTER_ERRORS if ignore_errors is None else ignore_errors
+        if not ignore:
             raise exc
+        if not ignore_errors:
+            # This is when ignore_errors is default None, and self.FILTER_ERRORS
+            # must be True. We do not log when the user sets ingore_errors
+            # to True.
+            self.exceptions.append(exc)
 
     def dispatch_callbacks(self, callbacks: list[Callable], *args, **kwargs) -> None:
         """Dispatch a list of callbacks with the given arguments.
@@ -380,9 +356,57 @@ class Network(MutableMapping):
             try:
                 result = callback(*args, **kwargs)
                 if result is not None and asyncio.iscoroutine(result):
-                    self.create_task(result)
+                    if self.loop is None:
+                        raise RuntimeError("Network is not running in async mode")
+
+                    # Wrap the coroutine in this function to ensure the
+                    # exceptions is either logged or raised, depending on the
+                    # value of self.FILTER_ERRORS.
+                    async def _error_handler(coro):
+                        try:
+                            return await coro
+                        except Exception as e:
+                            self.on_error(e, ignore_errors)
+
+                    # Create the task
+                    self.create_task(_error_handler(result))
             except Exception as e:
                 self.on_error(e, ignore_errors)
+
+    def create_task(self, coro: Coroutine, *args, **kwarge) -> asyncio.Task:
+        """Create an async task.
+
+        This function is thread-safe and can be called from any thread. If
+        called from the same thread as the event loop, it will use
+        :code:`asyncio.create_task()` directly. If called from a different
+        thread, it will use :code:`asyncio.run_coroutine_threadsafe()` to
+        schedule the task in the event loop.
+
+        All tasks created with this function is managed by the task group
+        in :attr:`canopen.Network.taskgroup`, which takes care of cleaning up
+        the tasks when the network is closed and handles exceptions in the tasks.
+
+        :param coro:
+            The coroutine to run in the event loop.
+        """
+        if self.loop is None:
+            raise RuntimeError("Network is not running in async mode")
+
+        if threading.get_ident() == self.thread_id:
+            # If we are running in the same thread as the event loop
+            # asyncio.create_task() can be used directly.
+            return self.taskgroup.create_task(coro, *args, **kwarge)
+
+        else:
+            # Running in a different thread.
+            async def _create_task():
+                return self.taskgroup.create_task(coro, *args, **kwarge)
+            # Since this is another thread asyncio.get_running_loop() will
+            # not work. We need to use the stored event loop.
+            future = asyncio.run_coroutine_threadsafe(_create_task(), self.loop)
+            # The result() will block until the _create_task() coroutine has
+            # been executed and it returns the actual task object.
+            return future.result()
 
     def check(self) -> None:
         """Check that no fatal error has occurred in the receiving thread.
@@ -390,11 +414,20 @@ class Network(MutableMapping):
         If an exception caused the thread to terminate, that exception will be
         raised.
         """
-        if self.notifier is not None:
-            exc = self.notifier.exception
-            if exc is not None:
-                logger.error("An error has caused receiving of messages to stop")
-                raise exc
+        # Swap the list of exceptions to make sure the exceptions is not reported again
+        exceptions, self.exceptions = self.exceptions, []
+
+        # Check if the notifier has an exception. This might be the case when
+        # FILTER_ERRORS is False
+        if self.notifier is not None and (exc := self.notifier.exception) is not None:
+            exceptions.append(exc)
+
+        if len(exceptions) == 1:
+            logger.error("An error has caused receiving of messages to stop")
+            raise exceptions[0]
+        if len(exceptions) > 1:
+            logger.error("%s errors have caused receiving of messages to stop", len(exceptions))
+            raise ExceptionGroup("Multiple exceptions have occurred in callbacks", exceptions)
 
     def __getitem__(self, node_id: int) -> Union[RemoteNode, LocalNode]:
         return self.nodes[node_id]
