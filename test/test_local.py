@@ -178,10 +178,10 @@ class TestSDO(DualSyncAsyncTestCase):
 
     async def test_receive_abort_request(self):
         if self.async_test:
-            await self.remote_node.sdo.aabort(0x0504_0003)
+            await self.remote_node.sdo.aabort(0x0504_0003)  # Invalid sequence number
             await asyncio.sleep(0.1)
         else:
-            self.remote_node.sdo.abort(0x0504_0003)
+            self.remote_node.sdo.abort(0x0504_0003)  # Invalid sequence number
             time.sleep(0.1)
         # The delay was to ensure the abort request was received by the client
         # before we check the last received error.

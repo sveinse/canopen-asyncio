@@ -55,8 +55,13 @@ class Network(MutableMapping):
         self.nodes: dict[int, Union[RemoteNode, LocalNode]] = {}
         self.subscribers: dict[int, list[Callback]] = {}
         self.send_lock = threading.Lock()
+        #: A task group for managing async tasks. This is used to ensure that
+        #: all tasks are properly cleaned up when the network is closed.
         self.taskgroup: TaskGroup = TaskGroup()
         self.thread_id: int = threading.get_ident()
+        #: An async exit stack for managing async context managers. This is used
+        #: to ensure that all context managers are properly cleaned up when the
+        #: network is closed.
         self.exit_stack: AsyncExitStack = AsyncExitStack()
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.sync = SyncProducer(self)
@@ -193,6 +198,10 @@ class Network(MutableMapping):
         :code:`asyncio.create_task()` directly. If called from a different
         thread, it will use :code:`asyncio.run_coroutine_threadsafe()` to
         schedule the task in the event loop.
+
+        All tasks created with this function is managed by the task group
+        in :attr:`canopen.Network.taskgroup`, which takes care of cleaning up
+        the tasks when the network is closed and handles exceptions in the tasks.
 
         :param coro:
             The coroutine to run in the event loop.

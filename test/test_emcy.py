@@ -68,7 +68,6 @@ class TestEmcy(DualSyncAsyncTestCase):
     async def test_emcy_consumer_on_emcy(self):
         """Make sure multiple callbacks receive the same information."""
         emcy = self.emcy
-
         acc1 = []
         acc2 = []
         emcy.add_callback(lambda err: acc1.append(err))
@@ -105,7 +104,6 @@ class TestEmcy(DualSyncAsyncTestCase):
 
     async def test_emcy_consumer_reset(self):
         emcy = self.emcy
-
         await self.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
         await self.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(emcy.log), 2)
@@ -164,7 +162,6 @@ class TestEmcy(DualSyncAsyncTestCase):
     async def test_emcy_consumer_multiple_callbacks(self):
         """Test adding multiple callbacks and their execution order."""
         emcy = self.emcy
-
         call_order = []
         emcy.add_callback(lambda err: call_order.append('callback1'))
         emcy.add_callback(lambda err: call_order.append('callback2'))
@@ -175,7 +172,6 @@ class TestEmcy(DualSyncAsyncTestCase):
     async def test_emcy_consumer_callback_exception_handling(self):
         """Test that callback exceptions don't break other callbacks or the system."""
         emcy = self.emcy
-
         successful_callbacks = []
         emcy.add_callback(lambda err: successful_callbacks.append('success1'))
         emcy.add_callback(
@@ -191,7 +187,6 @@ class TestEmcy(DualSyncAsyncTestCase):
             self.skipTest("Not implemented for async")
 
         emcy = self.emcy
-
         await self.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
         await self.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(emcy.active), 2)
@@ -208,7 +203,6 @@ class TestEmcy(DualSyncAsyncTestCase):
             self.skipTest("Not implemented for async")
 
         emcy = self.emcy
-
         result = emcy.wait(timeout=0)
         self.assertIsNone(result)
         result = emcy.wait(timeout=0.001)
