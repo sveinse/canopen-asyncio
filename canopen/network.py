@@ -23,8 +23,8 @@ if sys.version_info >= (3, 11):
     from builtins import ExceptionGroup
     from asyncio import TaskGroup
 else:
-    from taskgroup import TaskGroup
     from exceptiongroup import ExceptionGroup
+    from taskgroup import TaskGroup
 
 logger = logging.getLogger(__name__)
 
