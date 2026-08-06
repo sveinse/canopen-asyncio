@@ -3,7 +3,7 @@ import os
 import unittest
 from configparser import RawConfigParser
 
-import canopen_asyncio
+import canopen_asyncio as canopen
 from canopen_asyncio.objectdictionary.eds import _signed_int_from_hex, build_variable
 from canopen_asyncio.utils import pretty_index
 
@@ -192,11 +192,11 @@ class TestEDS(unittest.TestCase):
 
     def test_array_compact_subobj(self):
         array = self.od[0x1003]
-        self.assertIsInstance(array, canopen_asyncio.objectdictionary.ODArray)
+        self.assertIsInstance(array, canopen.objectdictionary.ODArray)
         self.assertEqual(array.index, 0x1003)
         self.assertEqual(array.name, 'Pre-defined error field')
         var = array[5]
-        self.assertIsInstance(var, canopen_asyncio.objectdictionary.ODVariable)
+        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
         self.assertEqual(var.name, 'Pre-defined error field_5')
         self.assertEqual(var.index, 0x1003)
         self.assertEqual(var.subindex, 5)

@@ -1,7 +1,7 @@
 
 import pytest
 
-import canopen
+import canopen_asyncio as canopen
 
 
 @pytest.fixture(scope="session", autouse=True)

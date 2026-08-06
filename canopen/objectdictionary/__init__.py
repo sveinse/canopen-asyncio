@@ -68,10 +68,10 @@ def export_od(
             opened_here = True
 
         if doc_type == "eds":
-            from canopen.objectdictionary import eds
+            from canopen_asyncio.objectdictionary import eds
             return eds.export_eds(od, dest)
         elif doc_type == "dcf":
-            from canopen.objectdictionary import eds
+            from canopen_asyncio.objectdictionary import eds
             return eds.export_dcf(od, dest)
     finally:
         # If dest is opened in this fn, it should be closed

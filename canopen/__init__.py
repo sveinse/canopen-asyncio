@@ -9,6 +9,11 @@ from canopen_asyncio.objectdictionary import (
 from canopen_asyncio.profiles.p402 import BaseNode402
 from canopen_asyncio.sdo import SdoAbortedError, SdoCommunicationError
 
+# Additional imports for canopen_asyncio adoption
+from canopen_asyncio import timestamp
+from canopen_asyncio import node
+from canopen_asyncio import network
+
 try:
     from canopen_asyncio._version import version as __version__
 except ImportError:
@@ -27,6 +32,11 @@ __all__ = [
     "ObjectDictionary",
     "ObjectDictionaryError",
     "BaseNode402",
+
+    # Additional imports for canopen_asyncio adoption
+    "timestamp",
+    "node",
+    "network",
 ]
 __pypi_url__ = "https://pypi.org/project/canopen-asyncio/"
 

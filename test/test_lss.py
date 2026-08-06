@@ -2,8 +2,8 @@ import re
 import unittest
 from unittest.mock import MagicMock
 
-from canopen import lss
-from canopen.lss import LssError, LssMaster
+from canopen_asyncio import lss
+from canopen_asyncio.lss import LssError, LssMaster
 
 
 class TestLssMaster(unittest.TestCase):

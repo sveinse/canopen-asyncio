@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import canopen
+import canopen_asyncio as canopen
 
 # Set logging output
 logging.basicConfig(level=logging.INFO)

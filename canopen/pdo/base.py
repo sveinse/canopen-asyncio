@@ -9,7 +9,7 @@ import threading
 from collections.abc import Iterator, Mapping
 from typing import Callable, Optional, TYPE_CHECKING, Union
 
-from canopen_asyncio import canopen
+import canopen_asyncio as canopen
 from canopen_asyncio import objectdictionary
 from canopen_asyncio import variable
 from canopen_asyncio.async_guard import ensure_not_async

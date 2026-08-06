@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 from typing import Union
 
-from canopen_asyncio import canopen
+import canopen_asyncio as canopen
 from canopen_asyncio import objectdictionary
 from canopen_asyncio.emcy import EmcyProducer
 from canopen_asyncio.nmt import NmtSlave

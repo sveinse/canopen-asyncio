@@ -181,7 +181,7 @@ Here are some quick examples of what you can do with the async port:
 .. code-block:: python
 
     import asyncio
-    import canopen
+    import canopen_ayncio as canopen
     import can
 
     async def my_node(network, nodeid, od):

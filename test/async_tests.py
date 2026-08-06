@@ -2,7 +2,7 @@ import asyncio
 import unittest
 from typing import Optional
 
-from canopen.async_guard import enable_async_guard
+from canopen_asyncio.async_guard import enable_async_guard
 
 
 class DualSyncAsyncTestCase(unittest.IsolatedAsyncioTestCase):

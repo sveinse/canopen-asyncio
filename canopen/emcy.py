@@ -8,7 +8,7 @@ import time
 from typing import Callable, Optional
 
 from canopen_asyncio.async_guard import ensure_not_async
-from canopen_asyncio import canopen
+import canopen_asyncio as canopen
 
 
 # Error code, error register, vendor specific data

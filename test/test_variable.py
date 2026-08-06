@@ -1,7 +1,7 @@
 import unittest
 
-from canopen import objectdictionary as od
-from canopen.variable import Variable
+from canopen_asyncio import objectdictionary as od
+from canopen_asyncio.variable import Variable
 
 
 class _StubVariable(Variable):

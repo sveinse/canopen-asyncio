@@ -19,7 +19,7 @@ from canopen_asyncio.objectdictionary import (
 from canopen_asyncio.sdo import SdoClient
 
 if TYPE_CHECKING:
-    from canopen_asyncio import canopen
+    import canopen_asyncio as canopen
 
 
 logger = logging.getLogger(__name__)

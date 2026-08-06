@@ -4,9 +4,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-import canopen_asyncio
 import canopen_asyncio as canopen
-import canopen_asyncio.timestamp
 
 
 class TestTime(unittest.TestCase):
@@ -35,7 +33,7 @@ class TestTime(unittest.TestCase):
         # Test again with the current time as implicit timestamp
         current = time.time()
         with patch("canopen_asyncio.timestamp.time.time", return_value=current):
-            current_from_epoch = current - canopen_asyncio.timestamp.OFFSET
+            current_from_epoch = current - canopen.timestamp.OFFSET
             producer.transmit()
             msg = network.bus.recv(1)
             self.assertEqual(msg.arbitration_id, 0x100)

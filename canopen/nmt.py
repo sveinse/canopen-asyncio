@@ -6,10 +6,10 @@ import time
 from typing import Callable, Final, Optional, TYPE_CHECKING
 
 from canopen_asyncio.async_guard import ensure_not_async
-from canopen_asyncio import canopen
+import canopen_asyncio as canopen
 
 if TYPE_CHECKING:
-    from canopen.network import PeriodicMessageTask
+    from canopen_asyncio.network import PeriodicMessageTask
 
 
 logger = logging.getLogger(__name__)

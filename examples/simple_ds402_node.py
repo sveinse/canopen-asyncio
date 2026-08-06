@@ -3,7 +3,7 @@ import sys
 import time
 import traceback
 
-import canopen
+import canopen_asyncio as canopen
 
 
 try:

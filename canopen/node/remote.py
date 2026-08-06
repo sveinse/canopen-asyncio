@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TextIO, Union
 
-from canopen_asyncio import canopen
+import canopen_asyncio as canopen
 from canopen_asyncio.emcy import EmcyConsumer
 from canopen_asyncio.nmt import NmtMaster
 from canopen_asyncio.node.base import BaseNode

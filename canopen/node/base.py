@@ -1,6 +1,6 @@
 from typing import TextIO, Union
 
-from canopen_asyncio import canopen
+import canopen_asyncio as canopen
 from canopen_asyncio.objectdictionary import ObjectDictionary, import_od
 
 
