@@ -1,5 +1,5 @@
-CANopen for Python, asyncio port
-================================
+CANopen for Python
+==================
 
 A Python implementation of the `CANopen standard`_.
 The aim of the project is to support the most common parts of the CiA 301
@@ -10,6 +10,12 @@ The library supports Python 3.9 or newer.
 
 This library is the asyncio port of CANopen. It is a fork of the upstream
 canopen_ library, adding support for running in an asyncio environment.
+
+The library can be run in two modes: regular mode or in async mode. In regular
+mode, calls to the library may block until a response is ready. In async mode
+it is possible to read and write to more than one node at the same time
+without the need of multiple threads.
+
 
 NOTE
 -----
@@ -119,17 +125,12 @@ Difference between async and non-async version
 
 This port have some differences with the upstream non-async version of canopen.
 
-* Minimum python version is 3.9, while the upstream version supports 3.8.
+* The async use of :code:`Network` must be used in an async context. This is
+  required to setup the async tasks and handles proper cleanup and exception
+  handling.
 
-* The :code:`Network` accepts additional parameters than upstream. It accepts
-  :code:`loop` which selects the mode of operation. If :code:`None` it will
-  run in blocking mode, otherwise it will run in async mode. It supports
-  providing a custom CAN :code:`notifier` if the CAN bus will be shared by
-  multiple protocols.
-
-* The :code:`Network` class can be (and should be) used in an async context
-  manager. This will ensure the network will be automatically disconnected when
-  exiting the context. See the example below.
+      async with canopen.Network().connect() as network:
+          # do async stuff with network
 
 * Most async functions follow an "a" prefix naming scheme.
   E.g. the async variant for :code:`SdoClient.download()` is available
@@ -141,18 +142,18 @@ This port have some differences with the upstream non-async version of canopen.
       var = sdo['Variable'].raw  # synchronous
       sdo['Variable'].raw = 12   # synchronous
 
-      var = await sdo['Variable'].get_raw()  # async
-      await sdo['Variable'].set_raw(12)      # async
+      var = await sdo['Variable']          # async
+      var = await sdo['Variable'].aread()  # async (equivalent)
+      await sdo['Variable'].awrite(12)     # async
 
-* Installed :code:`ensure_not_async()` sentinel guard in functions which
-  prevents calling blocking functions in async context. It will raise the
-  exception :code:`RuntimeError` "Calling a blocking function" when this
-  happen. If this is encountered, it is likely that the code is not using the
-  async variants of the library.
+* Opt-in :code:`ensure_not_async()` sentinel guard in functions which prevents
+  calling blocking functions in async context. It will raise the exception
+  :code:`RuntimeError` "Calling a blocking function" when this happen. If this
+  is encountered, the code is not using the async variants of the library when
+  it shouldn't.
 
-* The mechanism for CAN bus callbacks have been changed. Callbacks might be
-  async, which means they cannot be called immediately. This affects how
-  error handling is done in the library.
+  To enable it call :code:`canopen.async_guard.enable_async_guard(True)` in
+  your main thread/main loop.
 
 * The callbacks to the message handlers have been changed to be handled by
   :code:`Network.dispatch_callbacks()`. They are no longer called with any
@@ -164,14 +165,12 @@ This port have some differences with the upstream non-async version of canopen.
 
 * SDO block upload and download is not yet supported in async mode.
 
-* :code:`ODVariable.__len__()` returns 64 bits instead of 8 bits to support
-  truncated 24-bits integers, see #436
-
 * :code:`BaseNode402` does not work with async
 
-* :code:`LssMaster` does not work with async, except :code:`LssMaster.fast_scan()`
-
-* :code:`Bits` is not working in async
+* :code:`Bits` is not working differently in async mode. In non-async mode,
+  the raw value is read from the node when the :code:`Bits` object is created.
+  In async mode, the raw value must be manually read by calling
+  :code:`await bits.aread()` before accessing the bits.
 
 
 Quick start
@@ -202,7 +201,10 @@ Here are some quick examples of what you can do with the async port:
         await node.rpdo.aread()
 
         # Set the module state
-        node.nmt.state = 'OPERATIONAL'
+        node.nmt.set_state('OPERATIONAL')
+
+        # Set motor speed via SDO
+        await node.sdo['MotorSpeed'].awrite(2)
 
         while True:
 
@@ -212,14 +214,14 @@ Here are some quick examples of what you can do with the async port:
                 continue
 
             # Get the TPDO 1 value
-            speed = node.tpdo[1]['Velocity actual value'].phys
-            val = node.tpdo['Some group.Some subindex'].raw
+            rpm = node.tpdo[1]['MotorSpeed Actual'].raw
+            print(f'SPEED on motor {nodeid}:', rpm)
 
             # Sleep a little
             await asyncio.sleep(0.2)
 
             # Send RPDO 1 with some data
-            node.rpdo[1]['Some variable'].phys = 42
+            node.rpdo[1]['Some variable'].awrite(42, "phys")
             node.rpdo[1].transmit()
 
     async def main():

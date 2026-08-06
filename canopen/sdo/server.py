@@ -29,9 +29,7 @@ class SdoServer(SdoBase):
         self._subindex = None
         self.last_received_error = 0x00000000
 
-    # @callback  # NOTE: called from another thread
     def on_request(self, can_id, data, timestamp):
-        # FIXME: There is a lot of calls here, this must be checked for thread safe
         command, = struct.unpack_from("B", data, 0)
         ccs = command & 0xE0
 
@@ -193,7 +191,6 @@ class SdoServer(SdoBase):
         self.send_response(data)
         # logger.error("Transfer aborted with code 0x%08X", abort_code)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def upload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary.
 
@@ -224,7 +221,6 @@ class SdoServer(SdoBase):
         """
         return self._node.get_data(index, subindex)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def download(
         self,
         index: int,
@@ -253,7 +249,7 @@ class SdoServer(SdoBase):
         data: bytes,
         force_segment: bool = False,
     ):
-        """May be called to make a write operation without an Object Dictionary. 
+        """May be called to make a write operation without an Object Dictionary.
 
         :param index:
             Index of object to write.

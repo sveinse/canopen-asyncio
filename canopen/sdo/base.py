@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import binascii
-from collections.abc import Mapping
-from typing import Iterator, Optional, Union
+from collections.abc import Iterator, Mapping
+from typing import Optional, Union
 
 from canopen_asyncio import canopen
 from canopen_asyncio import objectdictionary
@@ -65,7 +65,7 @@ class SdoBase(Mapping):
     def __len__(self) -> int:
         return len(self.od)
 
-    def __contains__(self, key: Union[int, str]) -> bool:
+    def __contains__(self, key: object) -> bool:
         return key in self.od
 
     def get_variable(
@@ -80,6 +80,7 @@ class SdoBase(Mapping):
             return obj
         elif isinstance(obj, (SdoRecord, SdoArray)):
             return obj.get(subindex)
+        return None
 
     def upload(self, index: int, subindex: int) -> bytes:
         raise NotImplementedError()
@@ -136,7 +137,7 @@ class SdoRecord(Mapping):
     async def alen(self) -> int:
         return len(self.od)
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return subindex in self.od
 
 
@@ -164,13 +165,14 @@ class SdoArray(Mapping):
         return self.aiter()
 
     def __len__(self) -> int:
-        # NOTE: Blocking - protected in SdoClient
         return self[0].raw
 
     async def alen(self) -> int:
-        return await self[0].aget_raw()  # type: ignore[return-value]
+        return await self[0].aread()  # type: ignore[return-value]
 
-    def __contains__(self, subindex: int) -> bool:
+    def __contains__(self, subindex: object) -> bool:
+        if not isinstance(subindex, int):
+            return False
         return 0 <= subindex <= len(self)
 
 
@@ -181,17 +183,28 @@ class SdoVariable(variable.Variable):
         self.sdo_node = sdo_node
         variable.Variable.__init__(self, od)
 
-    def __await__(self):
-        return self.aget_raw().__await__()
+    def _truncate_data(self, data: bytes) -> bytes:
+        """Truncate data to the size specified in the object dictionary."""
+        response_size = len(data)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+        # If size is available through variable in OD, then use the smaller of the two sizes.
+        # Some devices send U32/I32 even if variable is smaller in OD
+        if self.od.fixed_size:
+            # Get the size in bytes for this variable
+            var_size = len(self.od) // 8
+            if response_size is None or var_size < response_size:
+                # Truncate the data to specified size
+                data = data[:var_size]
+        return data
+
     def get_data(self) -> bytes:
-        return self.sdo_node.upload(self.od.index, self.od.subindex)
+        data = self.sdo_node.upload(self.od.index, self.od.subindex)
+        return self._truncate_data(data)
 
     async def aget_data(self) -> bytes:
-        return await self.sdo_node.aupload(self.od.index, self.od.subindex)
+        data = await self.sdo_node.aupload(self.od.index, self.od.subindex)
+        return self._truncate_data(data)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def set_data(self, data: bytes):
         force_segment = self.od.data_type == objectdictionary.DOMAIN
         self.sdo_node.download(self.od.index, self.od.subindex, data, force_segment)
@@ -208,7 +221,6 @@ class SdoVariable(variable.Variable):
     def readable(self) -> bool:
         return self.od.readable
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def open(self, mode="rb", encoding="ascii", buffering=1024, size=None,
              block_transfer=False, request_crc_support=True):
         """Open the data stream as a file like object.

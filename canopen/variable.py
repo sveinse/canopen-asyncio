@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Union
 
 from canopen_asyncio import objectdictionary
-from canopen_asyncio.async_guard import ensure_not_async
-from canopen_asyncio.utils import pretty_index
+from canopen_asyncio.utils import is_running_async, pretty_index
 
 
 logger = logging.getLogger(__name__)
@@ -84,31 +85,38 @@ class Variable:
         """
         return self._get_raw(self.get_data())
 
-    async def aget_raw(self) -> Union[int, bool, float, str, bytes]:
-        """Raw representation of the object, async variant"""
-        return self._get_raw(await self.aget_data())
-
-    def _get_raw(self, data: bytes) -> Union[int, bool, float, str, bytes]:
-        value = self.od.decode_raw(data)
-        text = f"Value of {self.name!r} ({pretty_index(self.index, self.subindex)}) is {value!r}"
-        if value in self.od.value_descriptions:
-            text += f" ({self.od.value_descriptions[value]})"
-        logger.debug(text)
-        return value
-
     @raw.setter
     def raw(self, value: Union[int, bool, float, str, bytes]):
         self.set_data(self._set_raw(value))
 
-    async def aset_raw(self, value: Union[int, bool, float, str, bytes]):
-        """Set the raw value of the object, async variant"""
-        await self.aset_data(self._set_raw(value))
+    def _get_raw(self, data: bytes) -> Union[int, bool, float, str, bytes]:
+        value = self.od.decode_raw(data)
+        text = f"Value of {self.name!r} ({pretty_index(self.index, self.subindex)}) is {value!r}"
+        if (
+            isinstance(value, int)
+            and (desc := self.od.value_descriptions.get(value)) is not None
+        ):
+            text += f" ({desc})"
+        logger.debug(text)
+        return value
 
     def _set_raw(self, value: Union[int, bool, float, str, bytes]):
         logger.debug("Writing %r (0x%04X:%02X) = %r",
                      self.name, self.index,
                      self.subindex, value)
         return self.od.encode_raw(value)
+
+    async def _aget_raw(self) -> Union[int, bool, float, str, bytes]:
+        """Raw representation of the object, async variant"""
+        return self._get_raw(await self.aget_data())
+
+    async def _aset_raw(self, value: Union[int, bool, float, str, bytes]):
+        """Set the raw value of the object, async variant"""
+        await self.aset_data(self._set_raw(value))
+
+    def __await__(self):
+        """Awaiting the variable to get its raw value."""
+        return self._aget_raw().__await__()
 
     @property
     def phys(self) -> Union[int, bool, float, str, bytes]:
@@ -120,9 +128,9 @@ class Variable:
         """
         return self._get_phys(self.raw)
 
-    async def aget_phys(self) -> Union[int, bool, float, str, bytes]:
-        """Physical value scaled with some factor (defaults to 1), async variant."""
-        return self._get_phys(await self.aget_raw())
+    @phys.setter
+    def phys(self, value: Union[int, bool, float, str, bytes]):
+        self.raw = self.od.encode_phys(value)
 
     def _get_phys(self, raw: Union[int, bool, float, str, bytes]):
         value = self.od.decode_phys(raw)
@@ -130,37 +138,27 @@ class Variable:
             logger.debug("Physical value is %s %s", value, self.od.unit)
         return value
 
-    @phys.setter
-    def phys(self, value: Union[int, bool, float, str, bytes]):
-        self.raw = self.od.encode_phys(value)
-
-    async def aset_phys(self, value: Union[int, bool, float, str, bytes]):
-        """Set physical value scaled with some factor (defaults to 1). Async variant"""
-        await self.aset_raw(self.od.encode_phys(value))
-
     @property
     def desc(self) -> str:
-        """Converts to and from a description of the value as a string."""
-        value = self.od.decode_desc(self.raw)
-        logger.debug("Description is '%s'", value)
-        return value
+        """Convert to and from a description of the value as a string.
 
-    async def aget_desc(self) -> str:
-        """Converts to and from a description of the value as a string, async variant."""
-        value = self.od.decode_desc(await self.aget_raw())
-        logger.debug("Description is '%s'", value)
-        return value
+        :raises TypeError: If the received raw data was anything but an integer value.
+        """
+        return self._get_desc(self.raw)
 
     @desc.setter
     def desc(self, desc: str):
         self.raw = self.od.encode_desc(desc)
 
-    async def aset_desc(self, desc: str):
-        """Set variable description, async variant."""
-        await self.aset_raw(self.od.encode_desc(desc))
+    def _get_desc(self, raw: Union[int, bool, float, str, bytes]):
+        if not isinstance(raw, int):
+            raise TypeError("Description of values only supported for integer objects")
+        value = self.od.decode_desc(raw)
+        logger.debug("Description is '%s'", value)
+        return value
 
     @property
-    def bits(self) -> "Bits":
+    def bits(self) -> Bits:
         """Access bits using integers, slices, or bit descriptions."""
         return Bits(self)
 
@@ -177,6 +175,7 @@ class Variable:
 
         :returns:
             The value of the variable.
+        :raises ValueError: For unsupported fmt values.
         """
         if fmt == "raw":
             return self.raw
@@ -184,19 +183,22 @@ class Variable:
             return self.phys
         elif fmt == "desc":
             return self.desc
+        raise ValueError(f"Invalid format '{fmt}'")
 
     async def aread(self, fmt: str = "raw") -> Union[int, bool, float, str, bytes]:
         """Alternative way of reading using a function instead of attributes. Async variant."""
         if fmt == "raw":
-            return await self.aget_raw()
+            return await self._aget_raw()
         elif fmt == "phys":
-            return await self.aget_phys()
+            return self._get_phys(await self._aget_raw())
         elif fmt == "desc":
-            return await self.aget_desc()
-        raise ValueError(f"Unknown format '{fmt}'")
+            return self._get_desc(await self._aget_raw())
+        raise ValueError(f"Invalid format '{fmt}'")
 
     def write(
-        self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
+        self,
+        value: Union[int, bool, float, str, bytes],
+        fmt: str = "raw",
     ) -> None:
         """Alternative way of writing using a function instead of attributes.
 
@@ -207,12 +209,15 @@ class Variable:
              - 'raw'
              - 'phys'
              - 'desc'
+        :raises TypeError: If the "desc" format was specified with anything but a string value.
         """
         if fmt == "raw":
             self.raw = value
         elif fmt == "phys":
             self.phys = value
         elif fmt == "desc":
+            if not isinstance(value, str):
+                raise TypeError("fmt=desc requires a string value")
             self.desc = value
 
     async def awrite(
@@ -220,38 +225,67 @@ class Variable:
     ) -> None:
         """Alternative way of writing using a function instead of attributes. Async variant"""
         if fmt == "raw":
-            await self.aset_raw(value)
+            await self._aset_raw(value)
         elif fmt == "phys":
-            await self.aset_phys(value)
+            await self._aset_raw(self.od.encode_phys(value))
         elif fmt == "desc":
-            await self.aset_desc(value)  # type: ignore[arg-type]
+            if not isinstance(value, str):
+                raise TypeError("fmt=desc requires a string value")
+            await self._aset_raw(self.od.encode_desc(value))  # type: ignore[arg-type]
 
 
 class Bits(Mapping):
+    """Access bits using integers, slices, or bit descriptions.
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    In a synchronous context, the underlying raw value is read from the
+    variable automatically on initialization, so the bits are immediately
+    accessible. In an async context, the underlying value cannot be fetched
+    during ``__init__`` (which cannot await), so :meth:`aread` must be called
+    explicitly before accessing bits.
+
+    Similarly, in a synchronous context, changes made via ``__setitem__`` are
+    immediately written to the variable, but in an async context, :meth:`awrite`
+    must be called explicitly to write the changes.
+    """
+
     def __init__(self, variable: Variable):
+        assert variable.od.data_type in objectdictionary.datatypes.INTEGER_TYPES
         self.variable = variable
-        # FIXME: This is not compatible with async
-        self.read()
+
+        # There is a slight caveat here: is_running_async() indicates that there
+        # is a running event loop in the current thread, but it does not tell us
+        # if the canopen.Network instance is running in async mode.
+        self._is_not_running_async = not is_running_async()
+
+        # To remain backwards compatible, read immediately if not running in
+        # an async context.
+        if self._is_not_running_async:
+            self.read()
+
+        self.raw: int
 
     @staticmethod
-    def _get_bits(key):
+    def _get_bits(key: Union[slice, int, str, Collection[int]]) -> Union[str, Collection[int]]:
         if isinstance(key, slice):
-            bits = range(key.start, key.stop, key.step)
-        elif isinstance(key, int):
-            bits = [key]
-        else:
-            bits = key
-        return bits
+            if key.stop is None:
+                raise IndexError("Bits cannot be enumerated from open-ended slice")
+            else:
+                return range(key.start or 0, key.stop, key.step or 1)
+        if isinstance(key, int):
+            return [key]
+        return key
 
-    def __getitem__(self, key) -> int:
+    def __getitem__(self, key: Union[slice, int, str, Collection[int]]) -> int:
         return self.variable.od.decode_bits(self.raw, self._get_bits(key))
 
-    def __setitem__(self, key, value: int):
+    def __setitem__(self, key: Union[slice, int, str, Collection[int]], value: int):
         self.raw = self.variable.od.encode_bits(
             self.raw, self._get_bits(key), value)
-        self.write()
+
+        # To remain backwards compatible, write immediately if not running in
+        # an async context.
+        if self._is_not_running_async:
+            self.write()
 
     def __iter__(self):
         return iter(self.variable.od.bit_definitions)
@@ -260,13 +294,16 @@ class Bits(Mapping):
         return len(self.variable.od.bit_definitions)
 
     def read(self):
-        self.raw = self.variable.raw
+        assert isinstance(raw_int := self.variable.raw, int)
+        self.raw = raw_int
 
     def write(self):
         self.variable.raw = self.raw
 
     async def aread(self):
-        self.raw = await self.variable.aget_raw()
+        raw_int = await self.variable.aread()
+        assert isinstance(raw_int, int)
+        self.raw = raw_int
 
     async def awrite(self):
-        await self.variable.aset_raw(self.raw)
+        await self.variable.awrite(self.raw)

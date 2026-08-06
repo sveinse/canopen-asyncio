@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Union
+from collections.abc import Callable
+from typing import Union
 
 from canopen_asyncio import canopen
 from canopen_asyncio import objectdictionary
@@ -17,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 
 class LocalNode(BaseNode):
+    """Local CANopen node implementing essential communication services.
+
+    This does not provide a full-fledged communication logic stack, but needs
+    additional application logic to wire up the various services, such as
+    triggering PDO transmissions according to their communication parameters.
+
+    Notable exceptions are a local data store for SDO server access, and using
+    the Heartbeat Producer Time parameter to control Heartbeat transmission.
+
+    :param node_id:
+        Node ID (set to 0 if specified by object dictionary)
+    :param object_dictionary:
+        Object dictionary as either a path to a file, an ``ObjectDictionary``
+        or a file like object.
+    """
 
     def __init__(
         self,
@@ -25,9 +41,9 @@ class LocalNode(BaseNode):
     ):
         super(LocalNode, self).__init__(node_id, object_dictionary)
 
-        self.data_store: Dict[int, Dict[int, bytes]] = {}
-        self._read_callbacks = []
-        self._write_callbacks = []
+        self.data_store: dict[int, dict[int, bytes]] = {}
+        self._read_callbacks: list[Callable] = []
+        self._write_callbacks: list[Callable] = []
 
         self.sdo = SdoServer(0x600 + self.id, 0x580 + self.id, self)
         self.tpdo = TPDO(self)
@@ -62,10 +78,10 @@ class LocalNode(BaseNode):
         self.nmt.network = canopen.network._UNINITIALIZED_NETWORK
         self.emcy.network = canopen.network._UNINITIALIZED_NETWORK
 
-    def add_read_callback(self, callback):
+    def add_read_callback(self, callback: Callable):
         self._read_callbacks.append(callback)
 
-    def add_write_callback(self, callback):
+    def add_write_callback(self, callback: Callable):
         self._write_callbacks.append(callback)
 
     def get_data(

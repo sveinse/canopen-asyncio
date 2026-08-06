@@ -3,14 +3,15 @@ import unittest
 import canopen_asyncio as canopen
 
 from .util import SAMPLE_EDS, tmp_file
+from .async_tests import DualSyncAsyncTestCase
 
 
-class TestPDO(unittest.IsolatedAsyncioTestCase):
-
+class TestPDO(DualSyncAsyncTestCase):
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
 
     def setUp(self):
+        super().setUp()
+
         node = canopen.LocalNode(1, SAMPLE_EDS)
         pdo = node.pdo.tx[1]
         pdo.add_variable('INTEGER16 value')  # 0x2001
@@ -21,106 +22,97 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
         pdo.add_variable('BOOLEAN value 2', length=1)  # 0x2006
 
         # Write some values
-        # Async: moved to set_values() method
+        pdo['INTEGER16 value'].raw = -3
+        pdo['UNSIGNED8 value'].raw = 0xf
+        pdo['INTEGER8 value'].raw = -2
+        pdo['INTEGER32 value'].raw = 0x01020304
+        pdo['BOOLEAN value'].raw = False
+        pdo['BOOLEAN value 2'].raw = True
 
         self.pdo = pdo
         self.node = node
 
-    async def set_values(self):
-        """Initialize the PDO with some valuues.
+    def test_pdo_map_bit_mapping(self):
+        self.assertEqual(self.pdo.data, b'\xfd\xff\xef\x04\x03\x02\x01\x02')
 
-        Do this in a separate method in order to be abel to use the
-        async and sync versions of the tests.
-        """
-        node = self.node
-        pdo = node.pdo.tx[1]
-        if not self.use_async:
-            # Write some values
-            pdo['INTEGER16 value'].raw = -3
-            pdo['UNSIGNED8 value'].raw = 0xf
-            pdo['INTEGER8 value'].raw = -2
-            pdo['INTEGER32 value'].raw = 0x01020304
-            pdo['BOOLEAN value'].raw = False
-            pdo['BOOLEAN value 2'].raw = True
-        else:
-            # Write some values (different from the synchronous values)
-            await pdo['INTEGER16 value'].aset_raw(12)
-            await pdo['UNSIGNED8 value'].aset_raw(0xe)
-            await pdo['INTEGER8 value'].aset_raw(-4)
-            await pdo['INTEGER32 value'].aset_raw(0x56789abc)
-            await pdo['BOOLEAN value'].aset_raw(True)
-            await pdo['BOOLEAN value 2'].aset_raw(False)
-
-    async def test_pdo_map_bit_mapping(self):
-        await self.set_values()
-        if not self.use_async:
-            self.assertEqual(self.pdo.data, b'\xfd\xff\xef\x04\x03\x02\x01\x02')
-        else:
-            self.assertEqual(self.pdo.data, b'\x0c\x00\xce\xbc\x9a\x78\x56\x01')
-
-    async def test_pdo_map_getitem(self):
-        await self.set_values()
+    def test_pdo_map_getitem(self):
         pdo = self.pdo
-        if not self.use_async:
-            self.assertEqual(pdo['INTEGER16 value'].raw, -3)
-            self.assertEqual(pdo['UNSIGNED8 value'].raw, 0xf)
-            self.assertEqual(pdo['INTEGER8 value'].raw, -2)
-            self.assertEqual(pdo['INTEGER32 value'].raw, 0x01020304)
-            self.assertEqual(pdo['BOOLEAN value'].raw, False)
-            self.assertEqual(pdo['BOOLEAN value 2'].raw, True)
-        else:
-            self.assertEqual(await pdo['INTEGER16 value'].aget_raw(), 12)
-            self.assertEqual(await pdo['UNSIGNED8 value'].aget_raw(), 0xe)
-            self.assertEqual(await pdo['INTEGER8 value'].aget_raw(), -4)
-            self.assertEqual(await pdo['INTEGER32 value'].aget_raw(), 0x56789abc)
-            self.assertEqual(await pdo['BOOLEAN value'].aget_raw(), True)
-            self.assertEqual(await pdo['BOOLEAN value 2'].aget_raw(), False)
+        self.assertEqual(pdo['INTEGER16 value'].raw, -3)
+        self.assertEqual(pdo['UNSIGNED8 value'].raw, 0xf)
+        self.assertEqual(pdo['INTEGER8 value'].raw, -2)
+        self.assertEqual(pdo['INTEGER32 value'].raw, 0x01020304)
+        self.assertEqual(pdo['BOOLEAN value'].raw, False)
+        self.assertEqual(pdo['BOOLEAN value 2'].raw, True)
 
-    async def test_pdo_getitem(self):
-        await self.set_values()
+    def test_pdo_getitem(self):
         node = self.node
-        if not self.use_async:
-            self.assertEqual(node.tpdo[1]['INTEGER16 value'].raw, -3)
-            self.assertEqual(node.tpdo[1]['UNSIGNED8 value'].raw, 0xf)
-            self.assertEqual(node.tpdo[1]['INTEGER8 value'].raw, -2)
-            self.assertEqual(node.tpdo[1]['INTEGER32 value'].raw, 0x01020304)
-            self.assertEqual(node.tpdo['INTEGER32 value'].raw, 0x01020304)
-            self.assertEqual(node.tpdo[1]['BOOLEAN value'].raw, False)
-            self.assertEqual(node.tpdo[1]['BOOLEAN value 2'].raw, True)
+        self.assertEqual(node.tpdo[1]['INTEGER16 value'].raw, -3)
+        self.assertEqual(node.tpdo[1]['UNSIGNED8 value'].raw, 0xf)
+        self.assertEqual(node.tpdo[1]['INTEGER8 value'].raw, -2)
+        self.assertEqual(node.tpdo[1]['INTEGER32 value'].raw, 0x01020304)
+        self.assertEqual(node.tpdo['INTEGER32 value'].raw, 0x01020304)
+        self.assertEqual(node.tpdo[1]['BOOLEAN value'].raw, False)
+        self.assertEqual(node.tpdo[1]['BOOLEAN value 2'].raw, True)
 
-            # Test different types of access
-            self.assertEqual(node.pdo[0x1600]['INTEGER16 value'].raw, -3)
-            self.assertEqual(node.pdo['INTEGER16 value'].raw, -3)
-            self.assertEqual(node.pdo.tx[1]['INTEGER16 value'].raw, -3)
-            self.assertEqual(node.pdo[0x2001].raw, -3)
-            self.assertEqual(node.tpdo[0x2001].raw, -3)
-            self.assertEqual(node.pdo[0x2002].raw, 0xf)
-            self.assertEqual(node.pdo['0x2002'].raw, 0xf)
-            self.assertEqual(node.tpdo[0x2002].raw, 0xf)
-            self.assertEqual(node.pdo[0x1600][0x2002].raw, 0xf)
-        else:
-            self.assertEqual(await node.tpdo[1]['INTEGER16 value'].aget_raw(), 12)
-            self.assertEqual(await node.tpdo[1]['UNSIGNED8 value'].aget_raw(), 0xe)
-            self.assertEqual(await node.tpdo[1]['INTEGER8 value'].aget_raw(), -4)
-            self.assertEqual(await node.tpdo[1]['INTEGER32 value'].aget_raw(), 0x56789abc)
-            self.assertEqual(await node.tpdo['INTEGER32 value'].aget_raw(), 0x56789abc)
-            self.assertEqual(await node.tpdo[1]['BOOLEAN value'].aget_raw(), True)
-            self.assertEqual(await node.tpdo[1]['BOOLEAN value 2'].aget_raw(), False)
+        # Test different types of access
+        by_mapping_record = node.pdo[0x1A00]
+        self.assertIsInstance(by_mapping_record, canopen.pdo.PdoMap)
+        self.assertEqual(by_mapping_record['INTEGER16 value'].raw, -3)
+        self.assertIs(node.tpdo[0x1A00], by_mapping_record)
+        self.assertIs(node.tpdo[0x1800], by_mapping_record)
+        self.assertIs(node.pdo[0x1800], by_mapping_record)
+        by_object_name = node.pdo['INTEGER16 value']
+        self.assertIsInstance(by_object_name, canopen.pdo.PdoVariable)
+        self.assertIs(by_object_name.od, node.object_dictionary['INTEGER16 value'])
+        self.assertEqual(by_object_name.raw, -3)
+        by_pdo_index = node.pdo.tx[1]
+        self.assertIs(by_pdo_index, by_mapping_record)
+        by_object_index = node.pdo[0x2001]
+        self.assertIsInstance(by_object_index, canopen.pdo.PdoVariable)
+        self.assertIs(by_object_index, by_object_name)
+        by_object_index_tpdo = node.tpdo[0x2001]
+        self.assertIs(by_object_index_tpdo, by_object_name)
+        by_object_index = node.pdo[0x2002]
+        self.assertEqual(by_object_index.raw, 0xf)
+        self.assertIs(node.pdo['0x2002'], by_object_index)
+        self.assertIs(node.tpdo[0x2002], by_object_index)
+        self.assertIs(node.pdo[0x1A00][0x2002], by_object_index)
 
-            # Test different types of access
-            self.assertEqual(await node.pdo[0x1600]['INTEGER16 value'].aget_raw(), 12)
-            self.assertEqual(await node.pdo['INTEGER16 value'].aget_raw(), 12)
-            self.assertEqual(await node.pdo.tx[1]['INTEGER16 value'].aget_raw(), 12)
-            self.assertEqual(await node.pdo[0x2001].aget_raw(), 12)
-            self.assertEqual(await node.tpdo[0x2001].aget_raw(), 12)
-            self.assertEqual(await node.pdo[0x2002].aget_raw(), 0xe)
-            self.assertEqual(await node.pdo['0x2002'].aget_raw(), 0xe)
-            self.assertEqual(await node.tpdo[0x2002].aget_raw(), 0xe)
-            self.assertEqual(await node.pdo[0x1600][0x2002].aget_raw(), 0xe)
+        self.assertIs(node.pdo[0x1400], node.pdo[0x1600])
+
+        self.assertRaises(KeyError, lambda: node.pdo[0])
+        self.assertRaises(KeyError, lambda: node.tpdo[0])
+        self.assertRaises(KeyError, lambda: node.pdo['DOES NOT EXIST'])
+        self.assertRaises(KeyError, lambda: node.pdo[0x1BFF])
+        self.assertRaises(KeyError, lambda: node.tpdo[0x1BFF])
+        self.assertRaises(KeyError, lambda: node.pdo[0x15FF])
+
+    def test_pdo_iterate(self):
+        node = self.node
+        pdo_iter = iter(node.pdo.items())
+        prev = 0  # To check strictly increasing record index number
+        for rpdo, (index, pdo) in zip(node.rpdo.values(), pdo_iter):
+            self.assertIs(rpdo, pdo)
+            self.assertGreater(index, prev)
+            prev = index
+        # Continue consuming from pdo_iter
+        for tpdo, (index, pdo) in zip(node.tpdo.values(), pdo_iter):
+            self.assertIs(tpdo, pdo)
+            self.assertGreater(index, prev)
+            prev = index
+
+    def test_pdo_maps_iterate(self):
+        node = self.node
+        self.assertEqual(len(node.pdo), sum(1 for _ in node.pdo))
+        self.assertEqual(len(node.tpdo), sum(1 for _ in node.tpdo))
+        self.assertEqual(len(node.rpdo), sum(1 for _ in node.rpdo))
+        self.assertEqual(len(node.rpdo) + len(node.tpdo), len(node.pdo))
+
+        pdo = node.tpdo[1]
+        self.assertEqual(len(pdo), sum(1 for _ in pdo))
 
     async def test_pdo_save(self):
-        await self.set_values()
-        if not self.use_async:
+        if not self.async_test:
             self.node.tpdo.save()
             self.node.rpdo.save()
         else:
@@ -129,31 +121,26 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
 
     async def test_pdo_save_skip_readonly(self):
         """Expect no exception when a record entry is not writable."""
-        await self.set_values()
-        if not self.use_async:
-            # Saving only happens with a defined COB ID and for specified parameters
-            self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
-            self.node.tpdo[1].trans_type = 1
-            self.node.tpdo[1].map_array[1].od.access_type = "r"
-            self.node.tpdo[1].save()
+        # Saving only happens with a defined COB ID and for specified parameters
+        self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
+        self.node.tpdo[1].trans_type = 1
+        self.node.tpdo[1].map_array[1].od.access_type = "r"
 
-            self.node.tpdo[2].cob_id = self.node.tpdo[2].predefined_cob_id
-            self.node.tpdo[2].trans_type = 1
-            self.node.tpdo[2].com_record[2].od.access_type = "r"
-            self.node.tpdo[2].save()
+        if not self.async_test:
+            self.node.tpdo[1].save()
         else:
-            # Saving only happens with a defined COB ID and for specified parameters
-            self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
-            self.node.tpdo[1].trans_type = 1
-            self.node.tpdo[1].map_array[1].od.access_type = "r"
             await self.node.tpdo[1].asave()
 
-            self.node.tpdo[2].cob_id = self.node.tpdo[2].predefined_cob_id
-            self.node.tpdo[2].trans_type = 1
-            self.node.tpdo[2].com_record[2].od.access_type = "r"
+        self.node.tpdo[2].cob_id = self.node.tpdo[2].predefined_cob_id
+        self.node.tpdo[2].trans_type = 1
+        self.node.tpdo[2].com_record[2].od.access_type = "r"
+
+        if not self.async_test:
+            self.node.tpdo[2].save()
+        else:
             await self.node.tpdo[2].asave()
 
-    async def test_pdo_export(self):
+    def test_pdo_export(self):
         try:
             import canmatrix
         except ImportError:
@@ -173,13 +160,13 @@ class TestPDO(unittest.IsolatedAsyncioTestCase):
 class TestPDOSync(TestPDO):
     """ Test the functions in synchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestPDOAsync(TestPDO):
     """ Test the functions in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 if __name__ == "__main__":

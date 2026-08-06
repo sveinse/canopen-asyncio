@@ -6,14 +6,13 @@ import asyncio
 import can
 
 import canopen_asyncio as canopen
-from canopen_asyncio.async_guard import AllowBlocking
 from canopen_asyncio.nmt import COMMAND_TO_STATE, NMT_COMMANDS, NMT_STATES, NmtError
 
 from .util import SAMPLE_EDS
+from .async_tests import DualSyncAsyncTestCase
 
 
 class TestNmtBase(unittest.TestCase):
-
     def setUp(self):
         node_id = 2
         self.node_id = node_id
@@ -45,29 +44,33 @@ class TestNmtBase(unittest.TestCase):
             self.nmt.state = "INVALID"
 
 
-class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
+class TestNmtMaster(DualSyncAsyncTestCase):
+    __test__ = False  # This is a base class, tests should not be run directly.
+
     NODE_ID = 2
     PERIOD = 0.01
     TIMEOUT = PERIOD * 10
 
-    __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
-
     def setUp(self):
-        loop = None
-        if self.use_async:
-            loop = asyncio.get_event_loop()
+        super().setUp()
 
-        net = canopen.Network(loop=loop)
+        net = canopen.Network()
         net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         net.connect(interface="virtual")
         with self.assertLogs():
-            with AllowBlocking():
-                node = net.add_node(self.NODE_ID, SAMPLE_EDS)
+            node = net.add_node(self.NODE_ID, SAMPLE_EDS)
 
-        self.bus = can.Bus(interface="virtual", loop=loop)
+        self.bus = can.Bus(interface="virtual")
         self.net = net
         self.node = node
+
+    async def asyncSetUp(self):
+        if self.async_test:
+            await self.net.__aenter__()
+
+    async def asyncTearDown(self):
+        if self.async_test:
+            await self.net.__aexit__(None, None, None)
 
     def tearDown(self):
         self.net.disconnect()
@@ -80,12 +83,12 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
 
     async def test_nmt_master_no_heartbeat(self):
         with self.assertRaisesRegex(NmtError, "heartbeat"):
-            if self.use_async:
+            if self.async_test:
                 await self.node.nmt.await_for_heartbeat(self.TIMEOUT)
             else:
                 self.node.nmt.wait_for_heartbeat(self.TIMEOUT)
         with self.assertRaisesRegex(NmtError, "boot-up"):
-            if self.use_async:
+            if self.async_test:
                 await self.node.nmt.await_for_bootup(self.TIMEOUT)
             else:
                 self.node.nmt.wait_for_bootup(self.TIMEOUT)
@@ -97,7 +100,7 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
                 t = threading.Timer(0.01, self.dispatch_heartbeat, args=(code,))
                 t.start()
                 self.addCleanup(t.join)
-                if self.use_async:
+                if self.async_test:
                     actual = await self.node.nmt.await_for_heartbeat(0.1)
                 else:
                     actual = self.node.nmt.wait_for_heartbeat(0.1)
@@ -108,7 +111,7 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
         t = threading.Timer(0.01, self.dispatch_heartbeat, args=(0x00,))
         t.start()
         self.addCleanup(t.join)
-        if self.use_async:
+        if self.async_test:
             await self.node.nmt.await_for_bootup(self.TIMEOUT)
         else:
             self.node.nmt.wait_for_bootup(self.TIMEOUT)
@@ -118,7 +121,7 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
         t = threading.Timer(0.01, self.dispatch_heartbeat, args=(0x00,))
         t.start()
         self.addCleanup(t.join)
-        if self.use_async:
+        if self.async_test:
             state = await self.node.nmt.await_for_heartbeat(self.TIMEOUT)
         else:
             state = self.node.nmt.wait_for_heartbeat(self.TIMEOUT)
@@ -128,7 +131,7 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
         t = threading.Timer(0.01, self.dispatch_heartbeat, args=(0xcb,))
         t.start()
         self.addCleanup(t.join)
-        if self.use_async:
+        if self.async_test:
             state = await self.node.nmt.await_for_heartbeat(self.TIMEOUT)
         else:
             state = self.node.nmt.wait_for_heartbeat(self.TIMEOUT)
@@ -146,13 +149,13 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
         self.node.nmt.add_heartbeat_callback(hook)
 
         self.dispatch_heartbeat(0x7f)
-        if self.use_async:
+        if self.async_test:
             await asyncio.to_thread(event.wait, self.TIMEOUT)
         else:
             self.assertTrue(event.wait(self.TIMEOUT))
         self.assertEqual(state, 127)
 
-    async def test_nmt_master_node_guarding(self):
+    def test_nmt_master_node_guarding(self):
         self.node.nmt.start_node_guarding(self.PERIOD)
         msg = self.bus.recv(self.TIMEOUT)
         self.assertIsNotNone(msg)
@@ -170,40 +173,44 @@ class TestNmtMaster(unittest.IsolatedAsyncioTestCase):
 class TestNmtMasterSync(TestNmtMaster):
     """ Run tests in non-asynchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestNmtMasterAsync(TestNmtMaster):
     """ Run tests in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
-class TestNmtSlave(unittest.IsolatedAsyncioTestCase):
-
+class TestNmtSlave(DualSyncAsyncTestCase):
     __test__ = False  # This is a base class, tests should not be run directly.
-    use_async: bool
 
     def setUp(self):
-        loop = None
-        if self.use_async:
-            loop = asyncio.get_event_loop()
+        super().setUp()
 
-        self.network1 = canopen.Network(loop=loop)
+        self.network1 = canopen.Network()
         self.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network1.connect("test", interface="virtual")
         with self.assertLogs():
-            with AllowBlocking():
-                self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
+            self.remote_node = self.network1.add_node(2, SAMPLE_EDS)
 
-        self.network2 = canopen.Network(loop=loop)
+        self.network2 = canopen.Network()
         self.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.network2.connect("test", interface="virtual")
         with self.assertLogs():
             self.local_node = self.network2.create_node(2, SAMPLE_EDS)
-            with AllowBlocking():
-                self.remote_node2 = self.network1.add_node(3, SAMPLE_EDS)
+            self.remote_node2 = self.network1.add_node(3, SAMPLE_EDS)
             self.local_node2 = self.network2.create_node(3, SAMPLE_EDS)
+
+    async def asyncSetUp(self):
+        if self.async_test:
+            await self.network1.__aenter__()
+            await self.network2.__aenter__()
+
+    async def asyncTearDown(self):
+        if self.async_test:
+            await self.network1.__aexit__(None, None, None)
+            await self.network2.__aexit__(None, None, None)
 
     def tearDown(self):
         self.network1.disconnect()
@@ -213,7 +220,7 @@ class TestNmtSlave(unittest.IsolatedAsyncioTestCase):
         self.remote_node.nmt.state = "OPERATIONAL"
         # Line below is just so that we are sure the client have received the command
         # before we do the check
-        if self.use_async:
+        if self.async_test:
             await asyncio.sleep(0.1)
         else:
             time.sleep(0.1)
@@ -223,7 +230,7 @@ class TestNmtSlave(unittest.IsolatedAsyncioTestCase):
         self.remote_node2.nmt.state = "OPERATIONAL"
         # Line below is just so that we are sure the client have received the command
         # before we do the check
-        if self.use_async:
+        if self.async_test:
             await asyncio.sleep(0.1)
         else:
             time.sleep(0.1)
@@ -237,7 +244,7 @@ class TestNmtSlave(unittest.IsolatedAsyncioTestCase):
 
         # Line below is just so that we are sure the slaves have received the command
         # before we do the check
-        if self.use_async:
+        if self.async_test:
             await asyncio.sleep(0.1)
         else:
             time.sleep(0.1)
@@ -250,8 +257,8 @@ class TestNmtSlave(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.remote_node.nmt.state, "INITIALISING")
         self.assertEqual(self.local_node.nmt.state, "INITIALISING")
         self.local_node.nmt.state = "OPERATIONAL"
-        if self.use_async:
-            await self.local_node.sdo[0x1017].aset_raw(100)
+        if self.async_test:
+            await self.local_node.sdo[0x1017].awrite(100)
             await asyncio.sleep(0.2)
         else:
             self.local_node.sdo[0x1017].raw = 100
@@ -260,17 +267,30 @@ class TestNmtSlave(unittest.IsolatedAsyncioTestCase):
 
         self.local_node.nmt.stop_heartbeat()
 
+    async def test_heartbeat_no_producer_time(self):
+        # Create a node without the producer heartbeat time parameter
+        node = canopen.LocalNode(1, canopen.ObjectDictionary())
+        self.network1.add_node(node)
+        if self.async_test:
+            with self.assertRaises(KeyError):
+                await node.sdo[0x1017].awrite(100)
+        else:
+            with self.assertRaises(KeyError):
+                node.sdo[0x1017].raw = 100
+        # Should not fail because of missing 0x1017 object entry
+        node.nmt.state = "PRE-OPERATIONAL"
+
 
 class TestNmtSlaveSync(TestNmtSlave):
     """ Run tests in non-asynchronous mode. """
     __test__ = True
-    use_async = False
+    async_test = False
 
 
 class TestNmtSlaveAsync(TestNmtSlave):
     """ Run tests in asynchronous mode. """
     __test__ = True
-    use_async = True
+    async_test = True
 
 
 if __name__ == "__main__":

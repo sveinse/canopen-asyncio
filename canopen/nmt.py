@@ -3,7 +3,7 @@ import logging
 import struct
 import threading
 import time
-from typing import Callable, Dict, Final, List, Optional, TYPE_CHECKING
+from typing import Callable, Final, Optional, TYPE_CHECKING
 
 from canopen_asyncio.async_guard import ensure_not_async
 from canopen_asyncio import canopen
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-NMT_STATES: Final[Dict[int, str]] = {
+NMT_STATES: Final[dict[int, str]] = {
     0: 'INITIALISING',
     4: 'STOPPED',
     5: 'OPERATIONAL',
@@ -23,7 +23,7 @@ NMT_STATES: Final[Dict[int, str]] = {
     127: 'PRE-OPERATIONAL'
 }
 
-NMT_COMMANDS: Final[Dict[str, int]] = {
+NMT_COMMANDS: Final[dict[str, int]] = {
     'OPERATIONAL': 1,
     'STOPPED': 2,
     'SLEEP': 80,
@@ -34,7 +34,7 @@ NMT_COMMANDS: Final[Dict[str, int]] = {
     'RESET COMMUNICATION': 130
 }
 
-COMMAND_TO_STATE: Final[Dict[int, int]] = {
+COMMAND_TO_STATE: Final[dict[int, int]] = {
     1: 5,
     2: 4,
     80: 80,
@@ -56,7 +56,6 @@ class NmtBase:
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self._state = 0
 
-    # @callback  # NOTE: called from another thread
     def on_command(self, can_id, data, timestamp):
         cmd, node_id = struct.unpack_from("BB", data)
         if node_id in (self.id, 0):
@@ -66,7 +65,6 @@ class NmtBase:
                 if new_state != self._state:
                     logger.info("New NMT state %s, old state %s",
                                 NMT_STATES[new_state], NMT_STATES[self._state])
-                # FIXME: Is this thread-safe?
                 self._state = new_state
 
     def send_command(self, code: int):
@@ -121,17 +119,14 @@ class NmtMaster(NmtBase):
         #: Timestamp of last heartbeat message
         self.timestamp: Optional[float] = None
         self.state_update = threading.Condition()
-        self._callbacks: List[Callable[[int], None]] = []
+        self._callbacks: list[Callable[[int], None]] = []
 
-    # @callback  # NOTE: called from another thread
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_heartbeat(self, can_id, data, timestamp):
         new_state, = struct.unpack_from("B", data)
         # Mask out toggle bit
         new_state &= 0x7F
         logger.debug("Received heartbeat can-id %d, state is %d", can_id, new_state)
 
-        # NOTE: Blocking lock
         with self.state_update:
             self.timestamp = timestamp
             if new_state == 0:
@@ -156,13 +151,11 @@ class NmtMaster(NmtBase):
             "Sending NMT command 0x%X to node %d", code, self.id)
         self.network.send_message(0, [code, self.id])
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async("Use await_for_heartbeat() instead")
     def wait_for_heartbeat(self, timeout: float = 10):
         """Wait until a heartbeat message is received."""
-        # NOTE: Blocking lock
         with self.state_update:
             self._state_received = None
-            # NOTE: Blocking call
             self.state_update.wait(timeout)
         if self._state_received is None:
             raise NmtError("No boot-up or heartbeat received")
@@ -172,16 +165,14 @@ class NmtMaster(NmtBase):
         """Wait until a heartbeat message is received."""
         return await asyncio.to_thread(self.wait_for_heartbeat, timeout)
 
-    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    @ensure_not_async("Use await_for_bootup() instead")
     def wait_for_bootup(self, timeout: float = 10) -> None:
         """Wait until a boot-up message is received."""
         end_time = time.time() + timeout
         while True:
             now = time.time()
-            # NOTE: Blocking lock
             with self.state_update:
                 self._state_received = None
-                # NOTE: Blocking call
                 self.state_update.wait(end_time - now + 0.1)
             if now > end_time:
                 raise NmtError("Timeout waiting for boot-up message")
@@ -231,7 +222,6 @@ class NmtSlave(NmtBase):
         self._heartbeat_time_ms = 0
         self._local_node = local_node
 
-    # @callback  # NOTE: called from another thread
     def on_command(self, can_id, data, timestamp):
         super(NmtSlave, self).on_command(can_id, data, timestamp)
         self.update_heartbeat()
@@ -252,13 +242,23 @@ class NmtSlave(NmtBase):
         # The heartbeat service should start on the transition
         # between INITIALIZING and PRE-OPERATIONAL state
         if old_state == 0 and self._state == 127:
-            # FIXME: Document why this was fixed
-            if self._heartbeat_time_ms == 0:
-                # NOTE: Blocking - protected in SdoClient
-                heartbeat_time_ms = self._local_node.sdo[0x1017].raw
+            if self.network.is_running_async:
+                # In async mode we cannot read the heartbeat directly, so we
+                # create a task to read it asynchronously and start the heartbeat
+                # service when the read is complete.
+                async def start_heartbeat_async():
+                    try:
+                        heartbeat_time_ms = await self._local_node.sdo[0x1017].aread()
+                        self.start_heartbeat(heartbeat_time_ms)
+                    except KeyError:
+                        pass
+                self.network.create_task(start_heartbeat_async())
             else:
-                heartbeat_time_ms = self._heartbeat_time_ms
-            self.start_heartbeat(heartbeat_time_ms)
+                try:
+                    heartbeat_time_ms = self._local_node.sdo[0x1017].raw
+                    self.start_heartbeat(heartbeat_time_ms)
+                except KeyError:
+                    pass
         else:
             self.update_heartbeat()
 
@@ -292,10 +292,8 @@ class NmtSlave(NmtBase):
             self._send_task.stop()
             self._send_task = None
 
-    # @callback  # NOTE: Indirectly called from another thread via on_command
     def update_heartbeat(self):
         if self._send_task is not None:
-            # FIXME: Make this thread-safe
             self._send_task.update([self._state])
 
 

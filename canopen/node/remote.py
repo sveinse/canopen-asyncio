@@ -19,7 +19,7 @@ class RemoteNode(BaseNode):
     """A CANopen remote node.
 
     :param node_id:
-        Node ID (set to None or 0 if specified by object dictionary)
+        Node ID (set to 0 if specified by object dictionary)
     :param object_dictionary:
         Object dictionary as either a path to a file, an ``ObjectDictionary``
         or a file like object.
@@ -39,7 +39,7 @@ class RemoteNode(BaseNode):
         #: Enable WORKAROUND for reversed PDO mapping entries
         self.curtis_hack = False
 
-        self.sdo_channels = []
+        self.sdo_channels: list[SdoClient] = []
         self.sdo = self.add_sdo(0x600 + self.id, 0x580 + self.id)
         self.tpdo = TPDO(self)
         self.rpdo = RPDO(self)
@@ -134,10 +134,8 @@ class RemoteNode(BaseNode):
             if subindex is not None:
                 logger.info('SDO [0x%04X][0x%02X]: %s: %#06x',
                             index, subindex, name, value)
-                # NOTE: Blocking - protected in SdoClient
                 self.sdo[index][subindex].raw = value
             else:
-                # NOTE: Blocking - protected in SdoClient
                 self.sdo[index].raw = value
                 logger.info('SDO [0x%04X]: %s: %#06x',
                             index, name, value)
